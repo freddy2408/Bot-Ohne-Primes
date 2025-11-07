@@ -103,14 +103,16 @@ def system_prompt(params: dict) -> str:
 # [OPENAI: REST CALL]
 # -----------------------------
 def call_openai(messages, temperature=0.3, max_tokens=240):
+    import json, requests, streamlit as st
+
     url = "https://api.openai.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": MODEL,            # z.B. "gpt-4o-mini"
-        "messages": messages,      # [{"role":"system"|"user"|"assistant","content":"..."}]
+        "model": MODEL,            # z. B. "gpt-4o-mini"
+        "messages": messages,      # [{"role":"system"/"user"/"assistant","content":"..."}]
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
@@ -118,30 +120,43 @@ def call_openai(messages, temperature=0.3, max_tokens=240):
     try:
         r = requests.post(url, headers=headers, json=payload, timeout=60)
     except requests.RequestException as e:
-        st.error(f"Netzwerkfehler beim Aufruf der OpenAI-API: {e}")
-        st.stop()
+        st.error(f"Netzwerkfehler zur OpenAI-API: {e}")
+        return None
 
-    # Statt blind raise_for_status → zeige verständliche Fehlermeldung
-    if r.status_code != 200:
-        try:
-            err_json = r.json()
-            err_msg = err_json.get("error", {}).get("message", r.text)
-            err_type = err_json.get("error", {}).get("type", "")
-        except Exception:
-            err_msg, err_type = r.text, ""
+    # KEIN raise_for_status hier!
+    # Wir zeigen Status + API-Fehlertext explizit an.
+    status = r.status_code
+    text = r.text
 
-        # Nutze Streamlit, um dir sofort den Grund zu zeigen:
-        st.error(f"OpenAI API error {r.status_code} ({err_type}): {err_msg}")
-        st.caption("Tipp: Prüfe MODEL / API-Key / Kontingent / Payload-Format.")
-        st.stop()
+    # Versuche, JSON zu parsen (auch im Fehlerfall)
+    try:
+        data = r.json()
+    except Exception:
+        data = None
 
-    data = r.json()
+    if status != 200:
+        # Versuche, eine saubere OpenAI-Fehlermeldung zu extrahieren
+        err_msg = None
+        err_type = None
+        if isinstance(data, dict):
+            err = data.get("error") or {}
+            err_msg = err.get("message")
+            err_type = err.get("type")
+        # Zeige beides: Status + (falls verfügbar) error.message
+        st.error(f"OpenAI-API-Fehler {status}"
+                 f"{' ('+err_type+')' if err_type else ''}"
+                 f": {err_msg or text[:500]}")
+        st.caption("Tipp: Prüfe MODEL / API-Key / Quota / Nachrichtenformat.")
+        return None
+
+    # Erfolgsfall: Content extrahieren
     try:
         return data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError):
-        st.error("Antwort der OpenAI-API hatte kein erwartetes Format.")
-        st.write(data)  # zur Diagnose
-        st.stop()
+    except Exception:
+        st.error("Antwortformat unerwartet. Rohdaten:")
+        st.code(text[:1000])
+        return None
+
 
 
 def generate_reply(history, params: dict) -> str:
@@ -181,6 +196,14 @@ def generate_reply(history, params: dict) -> str:
             reply = re.sub(pat, "", reply, flags=re.IGNORECASE)
 
     return reply
+
+
+reply = call_openai([sys] + history)
+if not reply:
+    st.warning("Die KI-Antwort konnte nicht erzeugt werden (siehe Fehlermeldung oben).")
+    st.stop()
+
+
 
 # -----------------------------
 # [Szenario-Kopf]
