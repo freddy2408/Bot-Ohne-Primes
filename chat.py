@@ -158,11 +158,11 @@ def call_openai(messages, temperature=0.3, max_tokens=240):
         return None
 
 
-
 def generate_reply(history, params: dict) -> str:
-    # 1. Rohantwort
     sys_msg = {"role": "system", "content": system_prompt(params)}
     reply = call_openai([sys_msg] + history)
+    if not isinstance(reply, str):
+        return "Entschuldigung, gerade gab es ein technisches Problem. Bitte versuchen Sie es erneut."
 
     # 2. Compliance: keine Machtprimes, Untergrenze einhalten
     def violates_rules(text: str) -> str | None:
@@ -198,10 +198,6 @@ def generate_reply(history, params: dict) -> str:
     return reply
 
 
-reply = call_openai([sys_msg] + history)
-if not reply:
-    st.warning("Die KI-Antwort konnte nicht erzeugt werden (siehe Fehlermeldung oben).")
-    st.stop()
 
 
 
