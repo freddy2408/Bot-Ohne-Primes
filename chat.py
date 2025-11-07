@@ -37,7 +37,7 @@ st.caption("Rolle: Verkäufer:in · Ton: freundlich & auf Augenhöhe · keine Ma
 # Diese Parameter gelten für die KI – im Admin-Bereich änderbar
 # -----------------------------
 DEFAULT_PARAMS = {
-    "scenario_text": "Sie verhandeln über ein gebrauchtes iPad (128 GB, sehr guter Zustand).",
+    "scenario_text": "Sie verhandeln über ein neues iPad (256 GB, neuste Generation).",
     "list_price": 1000,          # Ausgangspreis (Anker) – sichtbar im Szenario
     "min_price": 900,            # Untergrenze, der/die Verkäufer:in geht nie darunter
     "tone": "freundlich, respektvoll, auf Augenhöhe, sachlich",
@@ -55,7 +55,7 @@ if "chat" not in st.session_state:
     # Erste Bot-Nachricht (freundlich, ohne Machtprimes)
     st.session_state.chat = [
         {"role":"assistant", "content":
-         f"Hallo! Danke für Ihre Nachricht. Das iPad ist in sehr gutem Zustand. "
+         f"Hallo! Danke für Ihre Nachricht. Das iPad ist neu und originalverpackt. "
          f"Der angesetzte Preis liegt bei {st.session_state.params['list_price']} €. "
          "Wie ist Ihr Vorschlag?"}
     ]
@@ -88,7 +88,7 @@ def extract_prices(text: str):
 # -----------------------------
 def system_prompt(params: dict) -> str:
     return (
-        "Du simulierst eine Ebay-Kleinanzeigen-Verhandlung als VERKÄUFER:IN eines iPad (128 GB, sehr guter Zustand). "
+        "Du simulierst eine Ebay-Kleinanzeigen-Verhandlung als VERKÄUFER eines iPad (256 GB, neuste Generation). "
         f"Ausgangspreis: {params['list_price']} €. "
         f"Sprache: Deutsch. Ton: {params['tone']}. "
         f"Antwortlänge: höchstens {params['max_sentences']} Sätze, keine Listen. "
@@ -104,11 +104,45 @@ def system_prompt(params: dict) -> str:
 # -----------------------------
 def call_openai(messages, temperature=0.3, max_tokens=240):
     url = "https://api.openai.com/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-    payload = {"model": MODEL, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
-    r = requests.post(url, headers=headers, json=payload, timeout=60)
-    r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": MODEL,            # z.B. "gpt-4o-mini"
+        "messages": messages,      # [{"role":"system"|"user"|"assistant","content":"..."}]
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+
+    try:
+        r = requests.post(url, headers=headers, json=payload, timeout=60)
+    except requests.RequestException as e:
+        st.error(f"Netzwerkfehler beim Aufruf der OpenAI-API: {e}")
+        st.stop()
+
+    # Statt blind raise_for_status → zeige verständliche Fehlermeldung
+    if r.status_code != 200:
+        try:
+            err_json = r.json()
+            err_msg = err_json.get("error", {}).get("message", r.text)
+            err_type = err_json.get("error", {}).get("type", "")
+        except Exception:
+            err_msg, err_type = r.text, ""
+
+        # Nutze Streamlit, um dir sofort den Grund zu zeigen:
+        st.error(f"OpenAI API error {r.status_code} ({err_type}): {err_msg}")
+        st.caption("Tipp: Prüfe MODEL / API-Key / Kontingent / Payload-Format.")
+        st.stop()
+
+    data = r.json()
+    try:
+        return data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError):
+        st.error("Antwort der OpenAI-API hatte kein erwartetes Format.")
+        st.write(data)  # zur Diagnose
+        st.stop()
+
 
 def generate_reply(history, params: dict) -> str:
     # 1. Rohantwort
