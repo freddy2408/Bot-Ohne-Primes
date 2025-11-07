@@ -161,7 +161,7 @@ def call_openai(messages, temperature=0.3, max_tokens=240):
 
 def generate_reply(history, params: dict) -> str:
     # 1. Rohantwort
-    sys = {"role": "system", "content": system_prompt(params)}
+    sys_msg = {"role": "system", "content": system_prompt(params)}
     reply = call_openai([sys_msg] + history)
 
     # 2. Compliance: keine Machtprimes, Untergrenze einhalten
