@@ -34,6 +34,24 @@ h1,h2,h3 { margin-bottom: .4rem; }
 st.title("iPad-Verhandlung – Kontrollbedingung (ohne Machtprimes)")
 st.caption("Rolle: Verkäufer:in · Ton: freundlich & auf Augenhöhe · keine Macht-/Knappheits-/Autoritäts-Frames")
 
+CHAT_CSS = """
+<style>
+section.main > div {padding-top: 1rem;}
+.chat-bubble {padding:.7rem .9rem;border-radius:16px;margin:.25rem 0;line-height:1.4;display:inline-block;max-width:85%;box-shadow:0 1px 2px rgba(0,0,0,.06);}
+.msg-user {background:#1C64F2;color:white;border-bottom-right-radius:4px;}
+.msg-bot  {background:#F2F4F7;color:#0B1220;border-bottom-left-radius:4px;}
+.msg-meta {font-size:.72rem;color:#667085;margin-top:.15rem;}
+.row {display:flex;align-items:flex-end;margin:.25rem 0;}
+.row.right {justify-content:flex-end;}
+.row.left  {justify-content:flex-start;}
+hr.soft {border:none;border-top:1px solid #EEE;margin:.75rem 0;}
+div.block-container {padding-top:1.2rem;}
+.stButton > button {border-radius:999px;padding:.6rem 1rem;font-weight:600;}
+</style>
+"""
+st.markdown(CHAT_CSS, unsafe_allow_html=True)
+
+
 # -----------------------------
 # [EXPERIMENTSPARAMETER – defaults]
 # Diese Parameter gelten für die KI – im Admin-Bereich änderbar
@@ -107,6 +125,90 @@ def system_prompt(params: dict) -> str:
         f"Bei ≥ {params['min_price']} €: du kannst zustimmen, sofern sonst alles passt (Ort/Zahlung), oder minimal (5–20 €) höher kontern; unterschreite NIE {params['min_price']} €. "
         "Zum Gerät, falls gefragt: neu, 256 GB, Space Grey, Apple Pencil (2. Generation), M5-Chip."
     )
+
+st.title("💬 iPad Verhandlungs-Bot")
+
+# 3.1 – Erste Bot-Nachricht, falls Verlauf leer
+if len(st.session_state.get("history", [])) == 0:
+    first_msg = (
+        "Hi! Ich biete ein neues iPad (256 GB, Space Grey) inklusive Apple Pencil (2. Gen) mit M5-Chip an. "
+        f"Der Ausgangspreis liegt bei {DEFAULT_PARAMS['list_price']} €. Was schwebt dir preislich vor?"
+    )
+    st.session_state.history.append({"role":"assistant","text":first_msg,"ts":datetime.now().isoformat(timespec="seconds")})
+
+# 3.2 – Chat-Verlauf rendern (Bubbles)
+for item in st.session_state.get("history", []):
+    side = "right" if item["role"] == "user" else "left"
+    klass = "msg-user" if item["role"] == "user" else "msg-bot"
+    st.markdown(f"""
+    <div class="row {side}">
+        <div class="chat-bubble {klass}">{item['text']}</div>
+    </div>
+    <div class="row {side}"><div class="msg-meta">{item['ts']}</div></div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<hr class='soft'/>", unsafe_allow_html=True)
+
+# 3.3 – Eingabe + Senden
+col1, col2 = st.columns([3,1])
+with col1:
+    user_input = st.text_input(
+        "Deine Nachricht",
+        placeholder="z. B. 'Würde 750 € bieten.'",
+        disabled=st.session_state.get("closed", False)
+    )
+with col2:
+    send_clicked = st.button("Senden", use_container_width=True)
+
+# 3.4 – Deal bestätigen (fixer Preis) + Abbrechen
+deal_col1, deal_col2 = st.columns([1,1])
+with deal_col1:
+    show_deal = st.session_state.get("agreed_price") is not None and not st.session_state.get("closed", False)
+    confirm = st.button(
+        f"✅ Deal bestätigen: {st.session_state.get('agreed_price')} €",
+        use_container_width=True
+    ) if show_deal else False
+
+with deal_col2:
+    cancel = st.button("❌ Abbrechen", use_container_width=True) if not st.session_state.get("closed", False) else False
+
+# 3.5 – Senden-Handler (LLM oder deine Logik)
+if send_clicked and user_input.strip() and not st.session_state.get("closed", False):
+    # Verlauf updaten
+    st.session_state.history.append({"role":"user","text":user_input.strip(), "ts":datetime.now().isoformat(timespec="seconds")})
+
+    # === HIER: deinen LLM-Aufruf einsetzen ===
+    # Beispiel: reply, proposed_price, ready = call_your_llm(user_input, DEFAULT_PARAMS)
+    # Falls du (vorübergehend) meinen Stub nutzen willst:
+    reply, proposed_price, ready = simple_negotiation_bot(user_input, DEFAULT_PARAMS)
+
+    st.session_state.history.append({"role":"assistant","text":reply, "ts":datetime.now().isoformat(timespec="seconds")})
+    st.session_state.agreed_price = int(proposed_price) if (ready and proposed_price is not None) else None
+    st.experimental_rerun()
+
+# 3.6 – Abbrechen-Handler
+if cancel and not st.session_state.get("closed", False):
+    st.session_state.agreed_price = None
+    st.info("Deal abgebrochen. Du kannst weiter verhandeln.")
+    st.experimental_rerun()
+
+# 3.7 – Deal-Bestätigung speichert fixen Preis nur für Admin-Dashboard
+if confirm and not st.session_state.get("closed", False) and st.session_state.get("agreed_price") is not None:
+    st.session_state.closed = True
+    msg_count = len([m for m in st.session_state.get("history", []) if m["role"] in ("user","assistant")])
+    log_result(st.session_state.session_id, True, int(st.session_state.agreed_price), msg_count)  # -> SQLite/Excel nur im Dashboard sichtbar
+    st.success(f"Deal bestätigt: {st.session_state.agreed_price} €. Die Verhandlung ist abgeschlossen.")
+    st.stop()
+
+# 3.8 – Optional: Verhandlung ohne Einigung beenden und speichern
+if not st.session_state.get("closed", False):
+    no_deal = st.button("🔒 Verhandlung beenden (ohne Einigung)")
+    if no_deal:
+        st.session_state.closed = True
+        msg_count = len([m for m in st.session_state.get("history", []) if m["role"] in ("user","assistant")])
+        log_result(st.session_state.session_id, False, None, msg_count)
+        st.info("Verhandlung beendet – ohne Einigung.")
+        st.stop()
 
 
 # -----------------------------
@@ -307,13 +409,14 @@ if pwd_ok:
             st.write("Noch keine Ergebnisse gespeichert.")
         else:
             st.dataframe(df, use_container_width=True, hide_index=True)
+            from io import BytesIO
             buffer = BytesIO()
             df.to_excel(buffer, index=False)
             buffer.seek(0)
             st.download_button(
                 "Excel herunterladen",
                 buffer,
-                file_name=f"verhandlungsergebnisse_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                file_name="verhandlungsergebnisse.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
