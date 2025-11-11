@@ -37,9 +37,9 @@ st.caption("Rolle: Verkäufer:in · Ton: freundlich & auf Augenhöhe · keine Ma
 # Diese Parameter gelten für die KI – im Admin-Bereich änderbar
 # -----------------------------
 DEFAULT_PARAMS = {
-    "scenario_text": "Sie verhandeln über ein neues iPad (256 GB, neuste Generation).",
+    "scenario_text": "Sie verhandeln über ein neues iPad (neu, 256 GB, Space Grey) inklusive Apple Pencil (2. Gen) mit M5‑Chip.",
     "list_price": 1000,          # Ausgangspreis (Anker) – sichtbar im Szenario
-    "min_price": 900,            # Untergrenze, der/die Verkäufer:in geht nie darunter
+    "min_price": 800,            # Untergrenze, der/die Verkäufer:in geht nie darunter
     "tone": "freundlich, respektvoll, auf Augenhöhe, sachlich",
     "max_sentences": 4,          # KI-Antwortlänge in Sätzen
 }
@@ -88,7 +88,27 @@ def extract_prices(text: str):
 # -----------------------------
 def system_prompt(params: dict) -> str:
     return (
-        "Du simulierst eine Ebay-Kleinanzeigen-Verhandlung als VERKÄUFER eines iPad (256 GB, neuste Generation). "
+        "Du simulierst eine Ebay-Kleinanzeigen-Verhandlung als VERKÄUFER eines iPad. "
+        f"Ausgangspreis: {params['list_price']} €. "
+        f"Sprache: Deutsch. Ton: {params['tone']}. "
+        f"Antwortlänge: höchstens {params['max_sentences']} Sätze, keine Listen. "
+        "Kontrollbedingung: KEINE Macht-/Knappheits-/Autoritäts-Frames, keine Hinweise auf Alternativen, Deadlines, "
+        "Markt-/Neupreis oder 'Schmerzgrenze'. Keine Drohungen, keine Beleidigungen, keine Falschangaben. "
+        "Bleibe strikt in der Rolle. "
+        f"Preisliche Untergrenze: Du akzeptierst niemals < {params['min_price']} € und machst keine Angebote darunter. "
+        "Nenne oder verrate NIEMALS explizit eine Untergrenze/Mindestpreis/Schmerzgrenze. "
+        "Reagiere dynamisch auf Angebote (kein fixer Schritt): "
+        "- Wenn das Angebot < 500 € ist: bitte höflich um einen realistischen Preis und erkläre kurz den Wert, ohne Zahlen unter der Untergrenze zu nennen. "
+"
+        "- Bei 500–699 €: kontere typischerweise mit 880–920 €, begründe knapp (neu, 256 GB, Space Grey, Apple Pencil 2. Gen, M5‑Chip). "
+"
+        "- Bei 700–799 €: kontere typischerweise mit 820–870 € (je nach Verhandlungston), aber bleibe über der Untergrenze. "
+"
+        f"- Bei ≥ {params['min_price']} €: du kannst zustimmen, sofern sonst alles passt (Ort/Zahlung), oder minimal (5–20 €) höher kontern; unterschreite NIE {params['min_price']} €. "
+"
+        "Zum Gerät, falls gefragt: neu, 256 GB, Space Grey, Apple Pencil (2. Generation), M5‑Chip. "
+    )
+. "
         f"Ausgangspreis: {params['list_price']} €. "
         f"Sprache: Deutsch. Ton: {params['tone']}. "
         f"Antwortlänge: höchstens {params['max_sentences']} Sätze, keine Listen. "
@@ -233,10 +253,20 @@ if user_msg and not st.session_state.closed:
 
     with st.chat_message("assistant"):
         with st.spinner("Antwort wird generiert …"):
-            # Sichtbarer Verlauf + Systemprompt intern
-            visible_history = [{"role":c["role"],"content":c["content"]} for c in st.session_state.chat]
-            reply = generate_reply(visible_history, st.session_state.params)
-            st.markdown(reply)
+
+            # Prüfe auf sehr niedrige Angebote (< 500 €) und antworte direkt
+            try:
+                prices_in_msg = extract_prices(user_msg)
+            except Exception:
+                prices_in_msg = []
+            if prices_in_msg and min(prices_in_msg) < 500:
+                reply = "Das liegt deutlich zu niedrig. Bitte nennen Sie einen realistischen Preis — unter 500 € ist bei diesem neuen Set (256 GB, Space Grey, Apple Pencil 2. Gen, M5‑Chip) nicht möglich."
+                st.markdown(reply)
+            else:
+                # Sichtbarer Verlauf + Systemprompt intern
+                visible_history = [{"role":c["role"],"content":c["content"]} for c in st.session_state.chat]
+                reply = generate_reply(visible_history, st.session_state.params)
+                st.markdown(reply)
 
     st.session_state.chat.append({"role":"assistant","content":reply})
     append_log({"t": datetime.utcnow().isoformat(), "role":"assistant", "content": reply})
