@@ -222,15 +222,25 @@ st.caption(f"Session-ID: `{st.session_state.sid}`")
 # -----------------------------
 # [CHAT-VERLAUF]
 # -----------------------------
+# --- Session State sicher initialisieren (direkt nach den Imports einfügen) ---
+def init_state():
+    ss = st.session_state
+    ss.setdefault("session_id", f"sess-{int(time.time())}")
+    ss.setdefault("history", [])        # Chat-Verlauf
+    ss.setdefault("agreed_price", None) # zuletzt verhandelter Preis für Deal-Button
+    ss.setdefault("closed", False)      # Verhandlung abgeschlossen?
+
+init_state()
+
 st.title("💬 iPad Verhandlungs-Bot")
 
-if len(st.session_state.history) == 0:
+if len(st.session_state.get("history", [])) == 0:
     # initiale Bot-Nachricht (LLM oder simple_negotiation_bot)
     first_msg = "Hi! Ich biete ein neues iPad (256 GB, Space Grey) inklusive Apple Pencil (2. Gen) mit M5-Chip an. "\
                 f"Der Ausgangspreis liegt bei {DEFAULT_PARAMS['list_price']} €. Was schwebt dir preislich vor?"
     st.session_state.history.append({"role":"assistant","text":first_msg,"ts":datetime.now().isoformat(timespec="seconds")})
 
-for item in st.session_state.history:
+for item in st.session_state.get("history", []):
     side = "right" if item["role"] == "user" else "left"
     klass = "msg-user" if item["role"] == "user" else "msg-bot"
     st.markdown(f"""
