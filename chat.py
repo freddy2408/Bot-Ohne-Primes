@@ -1,93 +1,103 @@
-# ============================================
-# iPad-Verhandlung – Kontrollbedingung (ohne Machtprimes)
-# KI-Antworten nach Parametern, Deal/Abbruch, private Ergebnisse
-# ============================================
 
-import os, re, json, uuid, random, glob, requests
+import os
+import time
+import sqlite3
 from datetime import datetime
+from io import BytesIO
+
 import streamlit as st
 import pandas as pd
 
 # -----------------------------
-# [SECRETS & MODELL]
+# App Config & Styles
 # -----------------------------
-API_KEY = st.secrets["OPENAI_API_KEY"]
-MODEL  = st.secrets.get("OPENAI_MODEL", "gpt-4o-mini")
-ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
+st.set_page_config(page_title="iPad Verhandlungs-Bot", page_icon="💬", layout="centered")
 
-# -----------------------------
-# [UI: Layout & Styles]
-# -----------------------------
-st.set_page_config(page_title="iPad-Verhandlung – Kontrollbedingung", page_icon="💬")
-st.markdown("""
+CHAT_CSS = """
 <style>
-.stApp { max-width: 900px; margin: 0 auto; }
-h1,h2,h3 { margin-bottom: .4rem; }
-.small { color:#6b7280; font-size:.9rem; }
-.pill { display:inline-block; background:#ecfeff; border:1px solid #cffafe; color:#0e7490;
-        padding:2px 8px; border-radius:999px; font-size:.8rem; }
-</style>
-""", unsafe_allow_html=True)
-
-st.title("iPad-Verhandlung – Kontrollbedingung (ohne Machtprimes)")
-st.caption("Rolle: Verkäufer:in · Ton: freundlich & auf Augenhöhe · keine Macht-/Knappheits-/Autoritäts-Frames")
+/* overall page */
+section.main > div {padding-top: 1rem;}
+/* chat container */
+.chat-bubble {
+  padding: .7rem .9rem;
+  border-radius: 16px;
+  margin: .25rem 0 .25rem 0;
+  line-height: 1.4;
+  display: inline-block;
+  max-width: 85%;
+  box-shadow: 0 1px 2px rgba(0,0,0,.06);
+}
+.msg-user { background: #1C64F2; color: white; border-bottom-right-radius: 4px; }
+.msg-bot  { background: #F2F4F7; color: #0B1220; border-bottom-left-radius: 4px; }
+.msg-meta { font-size: .72rem; color: #667085; margin-top: .15rem; }
+.row { display: flex; align-items: flex-end; margin: .25rem 0; }
+.row.right { justify-content: flex-end; }
+.row.left  { justify-content: flex-start; }
+hr.soft { border: none; border-top: 1px solid #EEE; margin: .75rem 0; }
+div.block-container {padding-top: 1.2rem;}
+/* buttons */
+.stButton > button {border-radius: 999px; padding: .6rem 1rem; font-weight: 600;}
+/* hide Streamlit chrome a bit for clean look */
+footer {visibility: hidden;}
+header {visibility: visible;}
+"""
+st.markdown(CHAT_CSS, unsafe_allow_html=True)
 
 # -----------------------------
-# [EXPERIMENTSPARAMETER – defaults]
-# Diese Parameter gelten für die KI – im Admin-Bereich änderbar
+# Parameters
 # -----------------------------
 DEFAULT_PARAMS = {
-    "scenario_text": "Sie verhandeln über ein neues iPad (neu, 256 GB, Space Grey) inklusive Apple Pencil (2. Gen) mit M5‑Chip.",
-    "list_price": 1000,          # Ausgangspreis (Anker) – sichtbar im Szenario
-    "min_price": 800,            # Untergrenze, der/die Verkäufer:in geht nie darunter
-    "tone": "freundlich, respektvoll, auf Augenhöhe, sachlich",
-    "max_sentences": 4,          # KI-Antwortlänge in Sätzen
+    "list_price": 950,
+    "min_price": 800,  # Hardcap/Floor
+    "tone": "freundlich, klar, bestimmt",
+    "max_sentences": 3,
 }
 
 # -----------------------------
-# [SESSION STATE]
+# Data Storage (SQLite) for results
 # -----------------------------
-if "sid" not in st.session_state:
-    st.session_state.sid = str(uuid.uuid4())
-if "params" not in st.session_state:
-    st.session_state.params = DEFAULT_PARAMS.copy()
-if "chat" not in st.session_state:
-    # Erste Bot-Nachricht (freundlich, ohne Machtprimes)
-    st.session_state.chat = [
-        {"role":"assistant", "content":
-         f"Hallo! Danke für Ihre Nachricht. Das iPad ist neu und originalverpackt. "
-         f"Der angesetzte Preis liegt bei {st.session_state.params['list_price']} €. "
-         "Wie ist Ihr Vorschlag?"}
-    ]
-if "closed" not in st.session_state:
-    st.session_state.closed = False     # ob Verhandlung beendet ist
-if "outcome" not in st.session_state:
-    st.session_state.outcome = None     # "deal" oder "aborted"
-if "final_price" not in st.session_state:
-    st.session_state.final_price = None
+DB_PATH = os.environ.get("NEGOTIATION_DB_PATH", "negotiations.db")
+
+def _get_db():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS results (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          agreed INTEGER NOT NULL,
+          price INTEGER,
+          msg_count INTEGER NOT NULL
+        )
+    """)
+    conn.commit()
+    return conn
+
+DB = _get_db()
+
+def log_result(session_id: str, agreed: bool, price: int | None, msg_count: int):
+    DB.execute(
+        "INSERT INTO results (created_at, session_id, agreed, price, msg_count) VALUES (?, ?, ?, ?, ?)",
+        (datetime.utcnow().isoformat(timespec="seconds"), session_id, 1 if agreed else 0, price, msg_count)
+    )
+    DB.commit()
+
+def load_results_df() -> pd.DataFrame:
+    df = pd.read_sql_query("SELECT * FROM results ORDER BY id DESC", DB)
+    # nicer columns
+    if len(df) > 0:
+        df = df.rename(columns={
+            "created_at": "Zeitpunkt (UTC)",
+            "session_id": "Session",
+            "agreed": "Einigung?",
+            "price": "Preis (€)",
+            "msg_count": "Nachrichten gesamt"
+        })
+        df["Einigung?"] = df["Einigung?"].map({0:"Nein",1:"Ja"})
+    return df
 
 # -----------------------------
-# [REGELN: KEINE MACHTPRIMES + PREISFLOOR]
-# -----------------------------
-BAD_PATTERNS = [
-    r"\balternative(n)?\b", r"\bweitere(n)?\s+interessent(en|in)\b", r"\bknapp(e|heit)\b",
-    r"\bdeadline\b", r"\bletzte chance\b", r"\bbranchen(üblich|standard)\b",
-    r"\bmarktpreis\b", r"\bneupreis\b", r"\bschmerzgrenze\b", r"\bsonst geht es\b"
-]
-def contains_power_primes(text: str) -> bool:
-    t = text.lower()
-    return any(re.search(p, t) for p in BAD_PATTERNS)
-
-# Preis aus Text erkennen (simple Extraktion €-Wert oder nackte Zahl)
-PRICE_RE = re.compile(r"(?:€\s*)?(\d{2,5})")
-def extract_prices(text: str):
-    return [int(m.group(1)) for m in PRICE_RE.finditer(text)]
-
-# -----------------------------
-# [SYSTEM-PROMPT KONSTRUKTION]
-# -----------------------------
-# -----------------------------
-# [SYSTEM-PROMPT KONSTRUKTION]
+# Negotiation Logic (very simple placeholder LLM)
 # -----------------------------
 def system_prompt(params: dict) -> str:
     return (
@@ -108,249 +118,175 @@ def system_prompt(params: dict) -> str:
         "Zum Gerät, falls gefragt: neu, 256 GB, Space Grey, Apple Pencil (2. Generation), M5-Chip."
     )
 
+def simple_negotiation_bot(user_msg: str, params: dict) -> tuple[str, int | None, bool]:
+    """
+    Returns: (bot_reply, proposed_price_or_None, ready_to_close?)
+    This is a simple rule-based stand-in for your LLM call. Plug your LLM where this returns.
+    """
+    txt = user_msg.lower().replace("€","").replace("eur","").strip()
+    offered = None
+    # naive number extraction
+    import re
+    nums = re.findall(r"\d{2,4}", txt)
+    if nums:
+        try:
+            offered = int(nums[0])
+        except:
+            offered = None
+
+    # lowball guard
+    if offered is not None and offered < 500:
+        return ("Das liegt deutlich unter einem realistischen Preis. "
+                "Bitte nenn mir ein realistischeres Angebot – das Gerät ist neu (256 GB, Space Grey) mit Apple Pencil (2. Gen) und M5‑Chip.", None, False)
+
+    # dynamic counters
+    if offered is not None and 500 <= offered <= 699:
+        return ("Danke für das Angebot. Aufgrund des Zustands und Zubehörs sehe ich uns eher bei 900 €. "
+                "Könntest du auf 900 € gehen?", 900, False)
+
+    if offered is not None and 700 <= offered <= 799:
+        # stay > min_price
+        counter = max(params["min_price"] + 20, 830)
+        return (f"Wir sind nah beieinander. Ich könnte bei {counter} € entgegenkommen. "
+                "Passt das für dich?", counter, False)
+
+    if offered is not None and offered >= params["min_price"]:
+        # can accept
+        return (f"Einverstanden – {offered} € ist in Ordnung, sofern Abholung und Zahlung passen. "
+                "Wenn du auf »Deal« bestätigst, halten wir {offered} € fest.", offered, True)
+
+    # general response
+    return ("Hi! Ich biete ein neues iPad (256 GB, Space Grey) inklusive Apple Pencil (2. Gen) mit M5‑Chip an. "
+            f"Der Ausgangspreis liegt bei {params['list_price']} €. Was schwebt dir preislich vor?", None, False)
 
 # -----------------------------
-# [OPENAI: REST CALL]
+# Session State
 # -----------------------------
-def call_openai(messages, temperature=0.3, max_tokens=240):
-    import json, requests, streamlit as st
-
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": MODEL,            # z. B. "gpt-4o-mini"
-        "messages": messages,      # [{"role":"system"/"user"/"assistant","content":"..."}]
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }
-
-    try:
-        r = requests.post(url, headers=headers, json=payload, timeout=60)
-    except requests.RequestException as e:
-        st.error(f"Netzwerkfehler zur OpenAI-API: {e}")
-        return None
-
-    # KEIN raise_for_status hier!
-    # Wir zeigen Status + API-Fehlertext explizit an.
-    status = r.status_code
-    text = r.text
-
-    # Versuche, JSON zu parsen (auch im Fehlerfall)
-    try:
-        data = r.json()
-    except Exception:
-        data = None
-
-    if status != 200:
-        # Versuche, eine saubere OpenAI-Fehlermeldung zu extrahieren
-        err_msg = None
-        err_type = None
-        if isinstance(data, dict):
-            err = data.get("error") or {}
-            err_msg = err.get("message")
-            err_type = err.get("type")
-        # Zeige beides: Status + (falls verfügbar) error.message
-        st.error(f"OpenAI-API-Fehler {status}"
-                 f"{' ('+err_type+')' if err_type else ''}"
-                 f": {err_msg or text[:500]}")
-        st.caption("Tipp: Prüfe MODEL / API-Key / Quota / Nachrichtenformat.")
-        return None
-
-    # Erfolgsfall: Content extrahieren
-    try:
-        return data["choices"][0]["message"]["content"]
-    except Exception:
-        st.error("Antwortformat unerwartet. Rohdaten:")
-        st.code(text[:1000])
-        return None
-
-
-def generate_reply(history, params: dict) -> str:
-    sys_msg = {"role": "system", "content": system_prompt(params)}
-    reply = call_openai([sys_msg] + history)
-    if not isinstance(reply, str):
-        return "Entschuldigung, gerade gab es ein technisches Problem. Bitte versuchen Sie es erneut."
-
-    # 2. Compliance: keine Machtprimes, Untergrenze einhalten
-    def violates_rules(text: str) -> str | None:
-        if contains_power_primes(text):
-            return "Keine Macht-/Knappheits-/Autoritäts-Frames verwenden."
-        # Preis-Floor check
-        prices = extract_prices(text)
-        if any(p < params["min_price"] for p in prices):
-            return f"Unterschreite nie {params['min_price']} €; mache kein Angebot darunter."
-        return None
-
-    reason = violates_rules(reply)
-    attempts = 0
-    while reason and attempts < 2:
-        attempts += 1
-        history2 = [sys_msg] + history + [
-            {"role":"system","content": f"REGEL-VERSTOSS: {reason} Antworte neu – freundlich, verhandelnd, in {params['max_sentences']} Sätzen."}
-        ]
-        reply = call_openai(history2, temperature=0.25, max_tokens=220)
-        reason = violates_rules(reply)
-
-    # 3. Falls weiterhin Regelbruch, letzte Absicherung: sanft paraphrasieren (Floor)
-    if reason:
-        # Entferne potentielle Preise unter Floor
-        prices = extract_prices(reply)
-        low_prices = [p for p in prices if p < params["min_price"]]
-        if low_prices:
-            reply = re.sub(PRICE_RE, lambda m: m.group(0) if int(m.group(1)) >= params["min_price"] else str(params["min_price"]), reply)
-        # Entferne hartes Wording (Notlösung)
-        for pat in BAD_PATTERNS:
-            reply = re.sub(pat, "", reply, flags=re.IGNORECASE)
-
-    return reply
-
-
-
-
+if "session_id" not in st.session_state:
+    st.session_state.session_id = f"sess-{int(time.time())}"
+if "history" not in st.session_state:
+    st.session_state.history = []  # list of dicts: {"role": "user"/"assistant", "text": "...", "ts": iso}
+if "agreed_price" not in st.session_state:
+    st.session_state.agreed_price = None
+if "closed" not in st.session_state:
+    st.session_state.closed = False
 
 # -----------------------------
-# [Szenario-Kopf]
+# Sidebar: Results Dashboard (password protected)
 # -----------------------------
-with st.container():
-    st.subheader("Szenario")
-    st.write(st.session_state.params["scenario_text"])
-    st.write(f"**Ausgangspreis:** {st.session_state.params['list_price']} €")
+st.sidebar.header("📊 Ergebnisse")
+pwd_ok = False
+dashboard_password = st.secrets.get("DASHBOARD_PASSWORD", os.environ.get("DASHBOARD_PASSWORD"))
+pwd_input = st.sidebar.text_input("Passwort für Dashboard", type="password")
+if dashboard_password:
+    if pwd_input and pwd_input == dashboard_password:
+        pwd_ok = True
+    elif pwd_input and pwd_input != dashboard_password:
+        st.sidebar.warning("Falsches Passwort.")
+else:
+    st.sidebar.info("Kein Passwort gesetzt (DASHBOARD_PASSWORD). Dashboard ist deaktiviert.")
 
-st.caption(f"Session-ID: `{st.session_state.sid}`")
-
-# -----------------------------
-# [CHAT-VERLAUF]
-# -----------------------------
-for m in st.session_state.chat:
-    with st.chat_message(m["role"]):
-        st.markdown(m["content"])
-
-# Eingabe der Proband:innen
-user_msg = st.chat_input("Ihre Nachricht …", disabled=st.session_state.closed)
-
-def append_log(event: dict):
-    os.makedirs("logs", exist_ok=True)
-    path = os.path.join("logs", f"{st.session_state.sid}.jsonl")
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(event, ensure_ascii=False) + "\n")
-
-if user_msg and not st.session_state.closed:
-    st.session_state.chat.append({"role":"user","content":user_msg})
-    append_log({"t": datetime.utcnow().isoformat(), "role":"user", "content": user_msg})
-
-    with st.chat_message("assistant"):
-        with st.spinner("Antwort wird generiert …"):
-
-            # Prüfe auf sehr niedrige Angebote (< 500 €) und antworte direkt
-            try:
-                prices_in_msg = extract_prices(user_msg)
-            except Exception:
-                prices_in_msg = []
-            if prices_in_msg and min(prices_in_msg) < 500:
-                reply = "Das liegt deutlich zu niedrig. Bitte nennen Sie einen realistischen Preis — unter 500 € ist bei diesem neuen Set (256 GB, Space Grey, Apple Pencil 2. Gen, M5‑Chip) nicht möglich."
-                st.markdown(reply)
-            else:
-                # Sichtbarer Verlauf + Systemprompt intern
-                visible_history = [{"role":c["role"],"content":c["content"]} for c in st.session_state.chat]
-                reply = generate_reply(visible_history, st.session_state.params)
-                st.markdown(reply)
-
-    st.session_state.chat.append({"role":"assistant","content":reply})
-    append_log({"t": datetime.utcnow().isoformat(), "role":"assistant", "content": reply})
-
-# -----------------------------
-# [DEAL / ABBRECHEN – Buttons]
-# -----------------------------
-st.divider()
-st.subheader("Abschluss")
-col1, col2 = st.columns(2)
-with col1:
-    deal_click = st.button("✅ Deal", disabled=st.session_state.closed)
-with col2:
-    abort_click = st.button("❌ Abbrechen", disabled=st.session_state.closed)
-
-if deal_click and not st.session_state.closed:
-    with st.expander("Finalen Preis bestätigen"):
-        final = st.number_input("Finaler Preis (€):", min_value=0, max_value=10000,
-                                value=st.session_state.params["list_price"], step=5)
-        confirm = st.button("Einigung speichern")
-        if confirm:
-            st.session_state.closed = True
-            st.session_state.outcome = "deal"
-            st.session_state.final_price = int(final)
-            append_log({"t": datetime.utcnow().isoformat(), "event":"outcome", "outcome":"deal", "final_price": int(final)})
-            st.success("Einigung gespeichert. Vielen Dank!")
-
-if abort_click and not st.session_state.closed:
-    st.session_state.closed = True
-    st.session_state.outcome = "aborted"
-    st.session_state.final_price = None
-    append_log({"t": datetime.utcnow().isoformat(), "event":"outcome", "outcome":"aborted"})
-    st.info("Verhandlung als abgebrochen gespeichert. Vielen Dank!")
-
-# -----------------------------
-# [ADMIN-BEREICH: Einstellungen + Ergebnisse (privat)]
-# -----------------------------
-st.divider()
-st.subheader("Admin")
-with st.expander("Admin-Bereich öffnen"):
-    pwd = st.text_input("Admin-Passwort", type="password")
-    if ADMIN_PASSWORD and pwd == ADMIN_PASSWORD:
-        st.success("Admin-Zugang gewährt.")
-
-        # --- Parametrisierung (nur Admin kann ändern) ---
-        st.markdown("**Parameter anpassen**")
-        with st.form("param_form"):
-            scen = st.text_area("Szenario-Text", value=st.session_state.params["scenario_text"])
-            list_price = st.number_input("Ausgangspreis (€)", min_value=0, max_value=10000, value=st.session_state.params["list_price"], step=10)
-            min_price  = st.number_input("Untergrenze (€)", min_value=0, max_value=10000, value=st.session_state.params["min_price"], step=10)
-            tone = st.text_input("Ton (Beschreibung)", value=st.session_state.params["tone"])
-            max_sent = st.slider("Max. Sätze pro KI-Antwort", min_value=1, max_value=6, value=st.session_state.params["max_sentences"])
-            submitted = st.form_submit_button("Speichern (gilt für neue Antworten)")
-        if submitted:
-            st.session_state.params.update({
-                "scenario_text": scen,
-                "list_price": int(list_price),
-                "min_price": int(min_price),
-                "tone": tone,
-                "max_sentences": int(max_sent)
-            })
-            st.success("Parameter aktualisiert.")
-
-        st.markdown("---")
-        st.markdown("**Ergebnisse**  <span class='pill'>Nur Admin</span>", unsafe_allow_html=True)
-
-        # Alle JSONL lesen und Aggregat-Tabelle bauen
-        rows = []
-        for fp in glob.glob("logs/*.jsonl"):
-            sid = os.path.basename(fp).replace(".jsonl","")
-            with open(fp, "r", encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        rec = json.loads(line)
-                        rec["session_id"] = sid
-                        rows.append(rec)
-                    except Exception:
-                        pass
-
-        if rows:
-            df = pd.DataFrame(rows)
-            # Outcome-Zeilen extrahieren
-            outcomes = df[df.get("event","") == "outcome"].copy()
-            # Falls keine Outcomes, Hinweis
-            if outcomes.empty:
-                st.info("Noch keine abgeschlossenen Verhandlungen.")
-            else:
-                # Ansicht: session_id, Zeitpunkt, Outcome, final_price
-                view = outcomes[["session_id","t","outcome","final_price"]].sort_values("t")
-                st.dataframe(view, use_container_width=True)
-                csv = view.to_csv(index=False).encode("utf-8")
-                st.download_button("📥 Ergebnisse als CSV", data=csv, file_name="verhandlung_ergebnisse.csv", mime="text/csv")
-                st.caption("Hinweis: Nur hier im Admin-Bereich sichtbar.")
+if pwd_ok:
+    st.sidebar.success("Zugang gewährt.")
+    with st.sidebar.expander("Alle Verhandlungsergebnisse", expanded=True):
+        df = load_results_df()
+        if len(df) == 0:
+            st.write("Noch keine Ergebnisse gespeichert.")
         else:
-            st.info("Noch keine Log-Daten vorhanden.")
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            # Excel download
+            buffer = BytesIO()
+            df.to_excel(buffer, index=False)
+            buffer.seek(0)
+            st.download_button(
+                "Excel herunterladen",
+                buffer,
+                file_name=f"verhandlungsergebnisse_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+
+# -----------------------------
+# Main: Clean Chat UI
+# -----------------------------
+st.title("💬 iPad Verhandlungs‑Bot")
+
+# initial assistant message (only once)
+if len(st.session_state.history) == 0:
+    first_msg = simple_negotiation_bot("", DEFAULT_PARAMS)[0]
+    st.session_state.history.append({"role":"assistant","text":first_msg,"ts":datetime.now().isoformat(timespec="seconds")})
+
+# render chat history
+for item in st.session_state.history:
+    side = "right" if item["role"] == "user" else "left"
+    klass = "msg-user" if item["role"] == "user" else "msg-bot"
+    with st.container():
+        st.markdown(f"""
+        <div class="row {side}">
+            <div class="chat-bubble {klass}">{item['text']}</div>
+        </div>
+        <div class="row {side}"><div class="msg-meta">{item['ts']}</div></div>
+        """, unsafe_allow_html=True)
+
+st.markdown("<hr class='soft'/>", unsafe_allow_html=True)
+
+col1, col2 = st.columns([3,1])
+
+# input is disabled when closed
+with col1:
+    user_input = st.text_input("Deine Nachricht", placeholder="z. B. 'Würde 750 € bieten.'", disabled=st.session_state.closed)
+
+with col2:
+    send_clicked = st.button("Senden", use_container_width=True)
+
+# "Deal bestätigen" button shows only when ready + not closed
+deal_col1, deal_col2 = st.columns([1,1])
+with deal_col1:
+    show_deal = st.session_state.agreed_price is not None and not st.session_state.closed
+    if show_deal:
+        confirm = st.button(f"✅ Deal bestätigen: {st.session_state.agreed_price} €", use_container_width=True)
     else:
-        st.caption("Gib das korrekte Admin-Passwort ein, um Parameter und Ergebnisse zu sehen.")
+        confirm = False
+with deal_col2:
+    if not st.session_state.closed:
+        cancel = st.button("❌ Abbrechen", use_container_width=True)
+    else:
+        cancel = False
+
+# handle chat send
+if send_clicked and user_input.strip() and not st.session_state.closed:
+    st.session_state.history.append({"role":"user","text":user_input.strip(), "ts":datetime.now().isoformat(timespec="seconds")})
+    reply, proposed_price, ready = simple_negotiation_bot(user_input, DEFAULT_PARAMS)
+    st.session_state.history.append({"role":"assistant","text":reply, "ts":datetime.now().isoformat(timespec="seconds")})
+    if ready and proposed_price is not None:
+        st.session_state.agreed_price = int(proposed_price)
+    else:
+        st.session_state.agreed_price = None
+    st.experimental_rerun()
+
+# handle cancel
+if cancel and not st.session_state.closed:
+    st.session_state.agreed_price = None
+    st.info("Deal abgebrochen. Du kannst weiter verhandeln.")
+    st.experimental_rerun()
+
+# handle Deal confirmation (no manual price entry)
+if confirm and not st.session_state.closed and st.session_state.agreed_price is not None:
+    st.session_state.closed = True
+    # persist result
+    msg_count = len([m for m in st.session_state.history if m["role"] in ("user","assistant")])
+    log_result(st.session_state.session_id, True, st.session_state.agreed_price, msg_count)
+    # Show final system message
+    st.success(f"Deal bestätigt: {st.session_state.agreed_price} €. Die Verhandlung ist abgeschlossen.")
+    st.stop()
+
+# if closed without agreement, allow logging via button
+if not st.session_state.closed:
+    no_deal = st.button("🔒 Verhandlung beenden (ohne Einigung)")
+    if no_deal:
+        st.session_state.closed = True
+        msg_count = len([m for m in st.session_state.history if m["role"] in ("user","assistant")])
+        log_result(st.session_state.session_id, False, None, msg_count)
+        st.info("Verhandlung beendet – ohne Einigung.")
+        st.stop()
