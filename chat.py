@@ -10,17 +10,20 @@ import pandas as pd
 import time
 import sqlite3
 
-# --- Session State sicher initialisieren (muss VOR erster Nutzung stehen) ---
-def ensure_state():
-    ss = st.session_state
-    if "session_id" not in ss:
-        ss["session_id"] = f"sess-{int(time.time())}"
-    if "history" not in ss:
-        ss["history"] = []            # Chat-Verlauf
-    if "agreed_price" not in ss:
-        ss["agreed_price"] = None     # Preis für Deal-Button
-    if "closed" not in ss:
-        ss["closed"] = False          # Verhandlung abgeschlossen?
+# --------------------------------
+# Session State initialisieren
+# --------------------------------
+if "session_id" not in st.session_state:
+    st.session_state["session_id"] = f"sess-{int(time.time())}"
+
+if "history" not in st.session_state:
+    st.session_state["history"] = []  # Chat-Verlauf als Liste von Dicts
+
+if "agreed_price" not in st.session_state:
+    st.session_state["agreed_price"] = None  # Preis, der per Deal-Button bestätigt werden kann
+
+if "closed" not in st.session_state:
+    st.session_state["closed"] = False  # Ob die Verhandlung abgeschlossen ist
 
 # -----------------------------
 # [SECRETS & MODELL]
@@ -92,7 +95,7 @@ if "chat" not in st.session_state:
          "Wie ist Ihr Vorschlag?"}
     ]
 if "closed" not in st.session_state:
-    st.session_state.closed = False     # ob Verhandlung beendet ist
+    st.session_state["closed"] = False     # ob Verhandlung beendet ist
 if "outcome" not in st.session_state:
     st.session_state.outcome = None     # "deal" oder "aborted"
 if "final_price" not in st.session_state:
@@ -141,13 +144,18 @@ def system_prompt(params: dict) -> str:
 
 st.title("💬 iPad Verhandlungs-Bot")
 
-# 3.1 – Erste Bot-Nachricht, falls Verlauf leer
-if len(st.session_state.get("history", [])) == 0:
+# 3.1 Initiale Bot-Nachricht (nur einmal, wenn der Verlauf noch leer ist)
+if len(st.session_state["history"]) == 0:
     first_msg = (
         "Hi! Ich biete ein neues iPad (256 GB, Space Grey) inklusive Apple Pencil (2. Gen) mit M5-Chip an. "
         f"Der Ausgangspreis liegt bei {DEFAULT_PARAMS['list_price']} €. Was schwebt dir preislich vor?"
     )
-    st.session_state.history.append({"role":"assistant","text":first_msg,"ts":datetime.now().isoformat(timespec="seconds")})
+    st.session_state["history"].append({
+        "role": "assistant",
+        "text": first_msg,
+        "ts": datetime.now().isoformat(timespec="seconds"),
+    })
+
 
 # 3.2 – Chat-Verlauf rendern (Bubbles)
 for item in st.session_state.get("history", []):
@@ -188,36 +196,36 @@ with deal_col2:
 # 3.5 – Senden-Handler (LLM oder deine Logik)
 if send_clicked and user_input.strip() and not st.session_state.get("closed", False):
     # Verlauf updaten
-    st.session_state.history.append({"role":"user","text":user_input.strip(), "ts":datetime.now().isoformat(timespec="seconds")})
+    st.session_state["history"].append({"role":"user","text":user_input.strip(), "ts":datetime.now().isoformat(timespec="seconds")})
 
     # === HIER: deinen LLM-Aufruf einsetzen ===
     # Beispiel: reply, proposed_price, ready = call_your_llm(user_input, DEFAULT_PARAMS)
     # Falls du (vorübergehend) meinen Stub nutzen willst:
     reply, proposed_price, ready = simple_negotiation_bot(user_input, DEFAULT_PARAMS)
 
-    st.session_state.history.append({"role":"assistant","text":reply, "ts":datetime.now().isoformat(timespec="seconds")})
-    st.session_state.agreed_price = int(proposed_price) if (ready and proposed_price is not None) else None
+    st.session_state["history"].append({"role":"assistant","text":reply, "ts":datetime.now().isoformat(timespec="seconds")})
+    st.session_state["agreed_price"] = int(proposed_price) if (ready and proposed_price is not None) else None
     st.experimental_rerun()
 
 # 3.6 – Abbrechen-Handler
 if cancel and not st.session_state.get("closed", False):
-    st.session_state.agreed_price = None
+    st.session_state["agreed_price"] = None
     st.info("Deal abgebrochen. Du kannst weiter verhandeln.")
     st.experimental_rerun()
 
 # 3.7 – Deal-Bestätigung speichert fixen Preis nur für Admin-Dashboard
 if confirm and not st.session_state.get("closed", False) and st.session_state.get("agreed_price") is not None:
-    st.session_state.closed = True
+    st.session_state["closed"] = True
     msg_count = len([m for m in st.session_state.get("history", []) if m["role"] in ("user","assistant")])
-    log_result(st.session_state.session_id, True, int(st.session_state.agreed_price), msg_count)  # -> SQLite/Excel nur im Dashboard sichtbar
-    st.success(f"Deal bestätigt: {st.session_state.agreed_price} €. Die Verhandlung ist abgeschlossen.")
+    log_result(st.session_state.session_id, True, int(st.session_state["agreed_price"]), msg_count)  # -> SQLite/Excel nur im Dashboard sichtbar
+    st.success(f"Deal bestätigt: {st.session_state["agreed_price"]} €. Die Verhandlung ist abgeschlossen.")
     st.stop()
 
 # 3.8 – Optional: Verhandlung ohne Einigung beenden und speichern
 if not st.session_state.get("closed", False):
     no_deal = st.button("🔒 Verhandlung beenden (ohne Einigung)")
     if no_deal:
-        st.session_state.closed = True
+        st.session_state["closed"] = True
         msg_count = len([m for m in st.session_state.get("history", []) if m["role"] in ("user","assistant")])
         log_result(st.session_state.session_id, False, None, msg_count)
         st.info("Verhandlung beendet – ohne Einigung.")
@@ -355,7 +363,7 @@ if len(st.session_state.get("history", [])) == 0:
     # initiale Bot-Nachricht (LLM oder simple_negotiation_bot)
     first_msg = "Hi! Ich biete ein neues iPad (256 GB, Space Grey) inklusive Apple Pencil (2. Gen) mit M5-Chip an. "\
                 f"Der Ausgangspreis liegt bei {DEFAULT_PARAMS['list_price']} €. Was schwebt dir preislich vor?"
-    st.session_state.history.append({"role":"assistant","text":first_msg,"ts":datetime.now().isoformat(timespec="seconds")})
+    st.session_state["history"].append({"role":"assistant","text":first_msg,"ts":datetime.now().isoformat(timespec="seconds")})
 
 for item in st.session_state.get("history", []):
     side = "right" if item["role"] == "user" else "left"
@@ -376,24 +384,24 @@ st.divider()
 st.subheader("Abschluss")
 col1, col2 = st.columns(2)
 with col1:
-    deal_click = st.button("✅ Deal", disabled=st.session_state.closed)
+    deal_click = st.button("✅ Deal", disabled=st.session_state["closed"])
 with col2:
-    abort_click = st.button("❌ Abbrechen", disabled=st.session_state.closed)
+    abort_click = st.button("❌ Abbrechen", disabled=st.session_state["closed"])
 
-if deal_click and not st.session_state.closed:
+if deal_click and not st.session_state["closed"]:
     with st.expander("Finalen Preis bestätigen"):
         final = st.number_input("Finaler Preis (€):", min_value=0, max_value=10000,
                                 value=st.session_state.params["list_price"], step=5)
         confirm = st.button("Einigung speichern")
         if confirm:
-            st.session_state.closed = True
+            st.session_state["closed"] = True
             st.session_state.outcome = "deal"
             st.session_state.final_price = int(final)
             append_log({"t": datetime.utcnow().isoformat(), "event":"outcome", "outcome":"deal", "final_price": int(final)})
             st.success("Einigung gespeichert. Vielen Dank!")
 
-if abort_click and not st.session_state.closed:
-    st.session_state.closed = True
+if abort_click and not st.session_state["closed"]:
+    st.session_state["closed"] = True
     st.session_state.outcome = "aborted"
     st.session_state.final_price = None
     append_log({"t": datetime.utcnow().isoformat(), "event":"outcome", "outcome":"aborted"})
