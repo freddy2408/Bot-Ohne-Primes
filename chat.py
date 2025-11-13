@@ -10,6 +10,18 @@ import pandas as pd
 import time
 import sqlite3
 
+# --- Session State sicher initialisieren (muss VOR erster Nutzung stehen) ---
+def ensure_state():
+    ss = st.session_state
+    if "session_id" not in ss:
+        ss["session_id"] = f"sess-{int(time.time())}"
+    if "history" not in ss:
+        ss["history"] = []            # Chat-Verlauf
+    if "agreed_price" not in ss:
+        ss["agreed_price"] = None     # Preis für Deal-Button
+    if "closed" not in ss:
+        ss["closed"] = False          # Verhandlung abgeschlossen?
+
 # -----------------------------
 # [SECRETS & MODELL]
 # -----------------------------
