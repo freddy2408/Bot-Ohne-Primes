@@ -133,10 +133,11 @@ def system_prompt(params: dict) -> str:
         "Reagiere dynamisch auf Angebote (kein fixer Schritt): "
         "Wenn das Angebot < 500 € ist: bitte höflich um einen realistischen Preis und erkläre kurz den Wert, ohne Zahlen unter der Untergrenze zu nennen. "
         "Bei 500–699 €: kontere typischerweise mit 880–920 €, begründe knapp (neu, 256 GB, Space Grey, Apple Pencil 2. Gen, M5-Chip). "
-        "Bei 700–799 €: kontere typischerweise mit 820–870 € (je nach Verhandlungston), aber bleibe über der Untergrenze. "
+        "Bei 700–799 €: kontere typischerweise mit 870–970 € (je nach Verhandlungston), und gehe erst mit der Zeit tiefer, Ziel soll am Ende immer noch eine Einigung sein. "
         f"Bei ≥ {params['min_price']} €: du kannst zustimmen, sofern sonst alles passt (Ort/Zahlung), oder minimal (5–20 €) höher kontern; unterschreite NIE {params['min_price']} €. "
         "Zum Gerät, falls gefragt: neu, 256 GB, Space Grey, Apple Pencil (2. Generation), M5-Chip."
     )
+
 
 st.title("💬 iPad Verhandlungs-Bot")
 
