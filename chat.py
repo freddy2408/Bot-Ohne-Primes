@@ -171,15 +171,50 @@ for item in st.session_state.get("history", []):
 st.markdown("<hr class='soft'/>", unsafe_allow_html=True)
 
 # 3.3 – Eingabe + Senden
-col1, col2 = st.columns([3,1])
-with col1:
-    user_input = st.text_input(
-        "Deine Nachricht",
-        placeholder="z. B. 'Würde 750 € bieten.'",
-        disabled=st.session_state.get("closed", False)
-    )
-with col2:
-    send_clicked = st.button("Senden", use_container_width=True)
+# Chat-Verlauf anzeigen
+for item in st.session_state["history"]:
+    side = "right" if item["role"] == "user" else "left"
+    klass = "msg-user" if item["role"] == "user" else "msg-bot"
+    st.markdown(f"""
+    <div class="row {side}">
+        <div class="chat-bubble {klass}">{item['text']}</div>
+    </div>
+    <div class="row {side}"><div class="msg-meta">{item['ts']}</div></div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<hr class='soft'/>", unsafe_allow_html=True)
+
+# 🔹 Eingabefeld am unteren Rand – Enter schickt automatisch
+user_input = st.chat_input(
+    "Deine Nachricht",
+    disabled=st.session_state["closed"],
+)
+
+if user_input and not st.session_state["closed"]:
+    # Nutzer-Nachricht speichern
+    st.session_state["history"].append({
+        "role": "user",
+        "text": user_input.strip(),
+        "ts": datetime.now().isoformat(timespec="seconds"),
+    })
+
+    # Antwort vom Bot holen
+    reply, proposed_price, ready = simple_negotiation_bot(user_input, DEFAULT_PARAMS)
+
+    st.session_state["history"].append({
+        "role": "assistant",
+        "text": reply,
+        "ts": datetime.now().isoformat(timespec="seconds"),
+    })
+
+    # Wenn der Bot zur Einigung bereit ist → Preis für Deal-Button merken
+    if ready and proposed_price is not None:
+        st.session_state["agreed_price"] = int(proposed_price)
+    else:
+        st.session_state["agreed_price"] = None
+
+    st.experimental_rerun()
+
 
 # 3.4 – Deal bestätigen (fixer Preis) + Abbrechen
 deal_col1, deal_col2 = st.columns([1,1])
@@ -197,6 +232,73 @@ with deal_col2:
 if send_clicked and user_input.strip() and not st.session_state.get("closed", False):
     # Verlauf updaten
     st.session_state["history"].append({"role":"user","text":user_input.strip(), "ts":datetime.now().isoformat(timespec="seconds")})
+
+import re  # ganz oben bei den Imports, falls noch nicht da
+
+def simple_negotiation_bot(user_msg: str, params: dict) -> tuple[str, int | None, bool]:
+    """
+    Gibt zurück: (bot_reply, proposed_price_or_None, ready_to_close?)
+    - bot_reply: Text, den der Bot antwortet
+    - proposed_price: Zahl in €, die als nächster Deal-Preis vorgeschlagen wird (oder None)
+    - ready_to_close: True, wenn der Bot einer Einigung zugestimmt hat
+    """
+    txt = user_msg.lower().replace("€", "").replace("eur", "").strip()
+
+    offered = None
+    nums = re.findall(r"\d{2,4}", txt)
+    if nums:
+        try:
+            offered = int(nums[0])
+        except ValueError:
+            offered = None
+
+    # 1. Sehr niedriges Angebot (< 500 €) → unrealistisch
+    if offered is not None and offered < 500:
+        return (
+            "Das liegt deutlich unter einem realistischen Preis. "
+            "Bitte nenn mir ein realistischeres Angebot – das Gerät ist neu (256 GB, Space Grey) "
+            "mit 256 GB Speicher sowie Apple Pencil (2. Generation) und M5-Chip.",
+            None,
+            False,
+        )
+
+    # 2. 500–699 € → Gegenangebot 880–920 €
+    if offered is not None and 500 <= offered <= 699:
+        return (
+            "Danke für dein Angebot. Aufgrund des Neuzustands, 256 GB Speicher und Apple Pencil "
+            "sehe ich uns eher bei 900 €. Könntest du auf 900 € gehen?",
+            900,
+            False,
+        )
+
+    # 3. 700–799 € → Gegenangebot leicht über Untergrenze
+    if offered is not None and 700 <= offered <= 799:
+        counter = max(params["min_price"] + 20, 830)  # bleibt über 800 €
+        return (
+            f"Wir sind schon recht nah beieinander. Ich könnte bei {counter} € entgegenkommen. "
+            "Wäre das für dich in Ordnung?",
+            counter,
+            False,
+        )
+
+    # 4. Angebot ≥ Untergrenze → Zustimmung möglich
+    if offered is not None and offered >= params["min_price"]:
+        return (
+            f"Einverstanden – {offered} € ist in Ordnung, sofern Abholung und Zahlung passen. "
+            f"Wenn du auf »Deal bestätigen« klickst, halten wir {offered} € fest.",
+            offered,
+            True,
+        )
+
+    # 5. Kein konkretes Angebot → allgemeine Antwort
+    return (
+        "Hi! Ich biete ein neues iPad (256 GB, Space Grey) mit 256 GB Speicher, "
+        "inklusive Apple Pencil (2. Generation) und M5-Chip an. "
+        f"Der Ausgangspreis liegt bei {params['list_price']} €. Was schwebt dir preislich vor?",
+        None,
+        False,
+    )
+
 
     # === HIER: deinen LLM-Aufruf einsetzen ===
     # Beispiel: reply, proposed_price, ready = call_your_llm(user_input, DEFAULT_PARAMS)
