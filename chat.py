@@ -229,13 +229,6 @@ with deal_col2:
     cancel = st.button("❌ Abbrechen", use_container_width=True) if not st.session_state.get("closed", False) else False
 
 # 3.5 – Senden-Handler (LLM oder deine Logik)
-user_input = st.chat_input(
-    "Deine Nachricht",
-    disabled=st.session_state["closed"],
-)
-
-if user_input and not st.session_state["closed"]:
-    ...
 
 import re  # ganz oben bei den Imports, falls noch nicht da
 
