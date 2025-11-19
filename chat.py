@@ -402,7 +402,6 @@ if user_input and not st.session_state["closed"]:
     else:
         st.session_state["agreed_price"] = None
 
-    st.rerun()
 
 # 5) Deal bestätigen / Abbrechen
 deal_col1, deal_col2 = st.columns([1, 1])
@@ -426,7 +425,6 @@ with deal_col2:
 if cancel and not st.session_state.get("closed", False):
     st.session_state["agreed_price"] = None
     st.info("Deal abgebrochen. Du kannst weiter verhandeln.")
-    st.rerun()
 
 # 7) Deal-Bestätigung → Ergebnis speichern
 if confirm and not st.session_state.get("closed", False) and st.session_state.get("agreed_price") is not None:
