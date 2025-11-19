@@ -223,64 +223,6 @@ def generate_reply(history, params: dict) -> str:
 
     return reply
 
-# -----------------------------
-# (Optional) einfache, regelbasierte Bot-Logik – aktuell NICHT verwendet
-# -----------------------------
-def simple_negotiation_bot(user_msg: str, params: dict) -> tuple[str, int | None, bool]:
-    """
-    Alte, feste Logik (nicht mehr aktiv benutzt, nur als Fallback vorhanden).
-    """
-    txt = user_msg.lower().replace("€", "").replace("eur", "").strip()
-
-    offered = None
-    nums = re.findall(r"\d{2,4}", txt)
-    if nums:
-        try:
-            offered = int(nums[0])
-        except ValueError:
-            offered = None
-
-    if offered is not None and offered < 500:
-        return (
-            "Das liegt deutlich unter einem realistischen Preis. "
-            "Bitte nenn mir ein realistischeres Angebot – das Gerät ist neu (256 GB, Space Grey) "
-            "mit 256 GB Speicher sowie Apple Pencil (2. Generation) und M5-Chip.",
-            None,
-            False,
-        )
-
-    if offered is not None and 500 <= offered <= 699:
-        return (
-            "Danke für dein Angebot. Aufgrund des Neuzustands, 256 GB Speicher und Apple Pencil "
-            "sehe ich uns eher bei 900 €. Könntest du auf 900 € gehen?",
-            900,
-            False,
-        )
-
-    if offered is not None and 700 <= offered <= 799:
-        counter = max(params["min_price"] + 20, 830)
-        return (
-            f"Wir sind schon recht nah beieinander. Ich könnte bei {counter} € entgegenkommen. "
-            "Wäre das für dich in Ordnung?",
-            counter,
-            False,
-        )
-
-    if offered is not None and offered >= params["min_price"]:
-        return (
-            f"Einverstanden – {offered} € ist in Ordnung, sofern Abholung und Zahlung passen. "
-            f"Wenn du auf »Deal bestätigen« klickst, halten wir {offered} € fest.",
-            offered,
-            True,
-        )
-
-    return (
-        "Hi! Ich biete ein neues iPad (256 GB, Space Grey) mit 256 GB Speicher, "
-        "inklusive Apple Pencil (2. Generation) und M5-Chip an. "
-        f"Der Ausgangspreis liegt bei {params['list_price']} €. Was schwebt dir preislich vor?",
-        None,
-        False,
-    )
 
 # -----------------------------
 # [ERGEBNIS-LOGGING (SQLite)]
