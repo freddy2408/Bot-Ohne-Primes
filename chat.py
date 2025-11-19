@@ -358,26 +358,14 @@ if len(st.session_state["history"]) == 0:
         "ts": datetime.now().isoformat(timespec="seconds"),
     })
 
-# 2) Chat-Verlauf anzeigen
-for item in st.session_state["history"]:
-    side = "right" if item["role"] == "user" else "left"
-    klass = "msg-user" if item["role"] == "user" else "msg-bot"
-    st.markdown(f"""
-    <div class="row {side}">
-        <div class="chat-bubble {klass}">{item['text']}</div>
-    </div>
-    <div class="row {side}"><div class="msg-meta">{item['ts']}</div></div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<hr class='soft'/>", unsafe_allow_html=True)
-
-# 3) Chat-Eingabe (einmal)
+# 2) Chat-Eingabe (kommt jetzt VOR dem Rendern der History,
+#    damit Antwort im selben Durchlauf sichtbar ist)
 user_input = st.chat_input(
     "Deine Nachricht",
     disabled=st.session_state["closed"],
 )
 
-# 4) Wenn User etwas sendet → Bot antwortet
+# 3) Wenn User etwas sendet → Bot antwortet und schreibt in history
 if user_input and not st.session_state["closed"]:
     # Nutzer-Nachricht speichern
     st.session_state["history"].append({
@@ -386,8 +374,7 @@ if user_input and not st.session_state["closed"]:
         "ts": datetime.now().isoformat(timespec="seconds"),
     })
 
-    # Bot-Antwort – aktuell regelbasiert (Funktionsweise unverändert)
-    # Wenn du später LLM nutzen willst: generate_reply(history_for_llm, st.session_state.params)
+    # Bot-Antwort – regelbasierter Bot (Funktionsweise unverändert)
     reply, proposed_price, ready = simple_negotiation_bot(user_input, DEFAULT_PARAMS)
 
     st.session_state["history"].append({
@@ -402,6 +389,18 @@ if user_input and not st.session_state["closed"]:
     else:
         st.session_state["agreed_price"] = None
 
+# 4) Chat-Verlauf anzeigen (jetzt inkl. frisch hinzugefügter Bot-Antwort)
+for item in st.session_state["history"]:
+    side = "right" if item["role"] == "user" else "left"
+    klass = "msg-user" if item["role"] == "user" else "msg-bot"
+    st.markdown(f"""
+    <div class="row {side}">
+        <div class="chat-bubble {klass}">{item['text']}</div>
+    </div>
+    <div class="row {side}"><div class="msg-meta">{item['ts']}</div></div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<hr class='soft'/>", unsafe_allow_html=True)
 
 # 5) Deal bestätigen / Abbrechen
 deal_col1, deal_col2 = st.columns([1, 1])
