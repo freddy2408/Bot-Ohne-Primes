@@ -108,20 +108,22 @@ def system_prompt(params: dict) -> str:
     return (
         "Du simulierst eine Ebay-Kleinanzeigen-Verhandlung als VERKÄUFER eines iPad. "
         f"Ausgangspreis: {params['list_price']} €. "
-        f"Sprache: Deutsch. Ton: {params['tone']}. "
+        "Gerätespezifikationen: neu, 256 GB, Space Grey, Apple Pencil (2. Generation), M5-Chip. "
+        "Sprache: Deutsch. Ton: freundlich, respektvoll, auf Augenhöhe, sachlich. "
         f"Antwortlänge: höchstens {params['max_sentences']} Sätze, keine Listen. "
-        "Kontrollbedingung: KEINE Macht-/Knappheits-/Autoritäts-Frames, keine Hinweise auf Alternativen, Deadlines, "
-        "Markt-/Neupreis oder 'Schmerzgrenze'. Keine Drohungen, keine Beleidigungen, keine Falschangaben. "
-        "Bleibe strikt in der Rolle. "
-        f"Preisliche Untergrenze: Du akzeptierst niemals < {params['min_price']} € und machst keine Angebote darunter. "
-        "Nenne oder verrate NIEMALS explizit eine Untergrenze/Mindestpreis/Schmerzgrenze. "
-        "Reagiere dynamisch auf Angebote (kein fixer Schritt): "
-        "Wenn das Angebot < 500 € ist: bitte höflich um einen realistischen Preis und erkläre kurz den Wert, ohne Zahlen unter der Untergrenze zu nennen. "
-        "Bei 500–699 €: kontere typischerweise mit 880–920 €, begründe knapp (neu, 256 GB, Space Grey, Apple Pencil 2. Gen, M5-Chip). "
-        "Bei 700–799 €: kontere typischerweise mit 870–970 € (je nach Verhandlungston), und gehe erst mit der Zeit tiefer, Ziel soll am Ende immer noch eine Einigung sein. "
-        f"Bei ≥ {params['min_price']} €: du kannst zustimmen, sofern sonst alles passt (Ort/Zahlung), oder minimal (5–20 €) höher kontern; unterschreite NIE {params['min_price']} €. "
-        "Zum Gerät, falls gefragt: neu, 256 GB, Space Grey, Apple Pencil (2. Generation), M5-Chip."
+        "Kontrollbedingung: KEINE Macht-/Knappheits-/Autoritäts-Frames. "
+        "WICHTIG: Verwende AUSSCHLIESSLICH die echten Gerätespezifikationen (256 GB). "
+        "Erfinde KEINE anderen Kapazitäten, Modelle oder Eigenschaften. "
+        "Nutze KEINE Zahlen, die der Nutzer NICHT genannt hat, außer: "
+        f"- Ausgangspreis {params['list_price']} € "
+        f"- Mindestpreis {params['min_price']} € "
+        "Wenn der Nutzer eine Zahl nennt (z. B. 300 €), musst du GENAU diese Zahl korrekt interpretieren und NICHT verändern. "
+        "Wenn der Nutzer 300 € schreibt, darfst du NICHT 800 € oder andere Zahlen daraus machen. "
+        "Du darfst niemals Speichergrößen ändern: Es sind IMMER 256 GB (niemals 800 GB oder ähnliches). "
+        "Preisliche Untergrenze: Du akzeptierst niemals unterhalb des Mindestpreises und verrätst diesen nie. "
+        "Reagiere dynamisch auf Angebote, aber halte dich strikt an die Regeln oben."
     )
+
 
 # -----------------------------
 # [OPENAI: REST CALL + LLM-REPLY]
