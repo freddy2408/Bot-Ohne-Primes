@@ -179,7 +179,6 @@ def call_openai(messages, temperature=0.3, max_tokens=240):
 def generate_reply(history, params: dict) -> str:
     """
     LLM-Antwort mit System-Prompt und Regelprüfung (Power-Primes, Preis-Floor).
-    Wird im aktuellen UI nicht aufgerufen, bleibt aber als Einbindung bestehen.
     """
     sys_msg = {"role": "system", "content": system_prompt(params)}
     reply = call_openai([sys_msg] + history)
@@ -199,7 +198,13 @@ def generate_reply(history, params: dict) -> str:
     while reason and attempts < 2:
         attempts += 1
         history2 = [sys_msg] + history + [
-            {"role": "system", "content": f"REGEL-VERSTOSS: {reason} Antworte neu – freundlich, verhandelnd, in {params['max_sentences']} Sätzen."}
+            {
+                "role": "system",
+                "content": (
+                    f"REGEL-VERSTOSS: {reason} Antworte neu – freundlich, "
+                    f"verhandelnd, in {params['max_sentences']} Sätzen."
+                ),
+            }
         ]
         reply = call_openai(history2, temperature=0.25, max_tokens=220)
         reason = violates_rules(reply)
@@ -219,14 +224,11 @@ def generate_reply(history, params: dict) -> str:
     return reply
 
 # -----------------------------
-# [EINFACHE, REGELBASIERTE BOT-LOGIK – wie zuvor]
+# (Optional) einfache, regelbasierte Bot-Logik – aktuell NICHT verwendet
 # -----------------------------
 def simple_negotiation_bot(user_msg: str, params: dict) -> tuple[str, int | None, bool]:
     """
-    Gibt zurück: (bot_reply, proposed_price_or_None, ready_to_close?)
-    - bot_reply: Text, den der Bot antwortet
-    - proposed_price: Zahl in €, die als nächster Deal-Preis vorgeschlagen wird (oder None)
-    - ready_to_close: True, wenn der Bot einer Einigung zugestimmt hat
+    Alte, feste Logik (nicht mehr aktiv benutzt, nur als Fallback vorhanden).
     """
     txt = user_msg.lower().replace("€", "").replace("eur", "").strip()
 
@@ -238,7 +240,6 @@ def simple_negotiation_bot(user_msg: str, params: dict) -> tuple[str, int | None
         except ValueError:
             offered = None
 
-    # 1. Sehr niedriges Angebot (< 500 €) → unrealistisch
     if offered is not None and offered < 500:
         return (
             "Das liegt deutlich unter einem realistischen Preis. "
@@ -248,7 +249,6 @@ def simple_negotiation_bot(user_msg: str, params: dict) -> tuple[str, int | None
             False,
         )
 
-    # 2. 500–699 € → Gegenangebot 880–920 €
     if offered is not None and 500 <= offered <= 699:
         return (
             "Danke für dein Angebot. Aufgrund des Neuzustands, 256 GB Speicher und Apple Pencil "
@@ -257,9 +257,8 @@ def simple_negotiation_bot(user_msg: str, params: dict) -> tuple[str, int | None
             False,
         )
 
-    # 3. 700–799 € → Gegenangebot leicht über Untergrenze
     if offered is not None and 700 <= offered <= 799:
-        counter = max(params["min_price"] + 20, 830)  # bleibt über 800 €
+        counter = max(params["min_price"] + 20, 830)
         return (
             f"Wir sind schon recht nah beieinander. Ich könnte bei {counter} € entgegenkommen. "
             "Wäre das für dich in Ordnung?",
@@ -267,7 +266,6 @@ def simple_negotiation_bot(user_msg: str, params: dict) -> tuple[str, int | None
             False,
         )
 
-    # 4. Angebot ≥ Untergrenze → Zustimmung möglich
     if offered is not None and offered >= params["min_price"]:
         return (
             f"Einverstanden – {offered} € ist in Ordnung, sofern Abholung und Zahlung passen. "
@@ -276,7 +274,6 @@ def simple_negotiation_bot(user_msg: str, params: dict) -> tuple[str, int | None
             True,
         )
 
-    # 5. Kein konkretes Angebot → allgemeine Antwort
     return (
         "Hi! Ich biete ein neues iPad (256 GB, Space Grey) mit 256 GB Speicher, "
         "inklusive Apple Pencil (2. Generation) und M5-Chip an. "
@@ -341,7 +338,7 @@ with st.container():
 st.caption(f"Session-ID: `{st.session_state.sid}`")
 
 # -----------------------------
-# [CHAT-UI]
+# [CHAT-UI – jetzt vollständig LLM-basiert]
 # -----------------------------
 st.subheader("💬 iPad Verhandlungs-Bot")
 
@@ -358,38 +355,55 @@ if len(st.session_state["history"]) == 0:
         "ts": datetime.now().isoformat(timespec="seconds"),
     })
 
-# 2) Chat-Eingabe (kommt jetzt VOR dem Rendern der History,
-#    damit Antwort im selben Durchlauf sichtbar ist)
+# 2) Eingabefeld
 user_input = st.chat_input(
     "Deine Nachricht",
     disabled=st.session_state["closed"],
 )
 
-# 3) Wenn User etwas sendet → Bot antwortet und schreibt in history
+# 3) Wenn User etwas sendet → LLM-Antwort holen
 if user_input and not st.session_state["closed"]:
+    now = datetime.now().isoformat(timespec="seconds")
+
     # Nutzer-Nachricht speichern
     st.session_state["history"].append({
         "role": "user",
         "text": user_input.strip(),
-        "ts": datetime.now().isoformat(timespec="seconds"),
+        "ts": now,
     })
 
-    # Bot-Antwort – regelbasierter Bot (Funktionsweise unverändert)
-    reply, proposed_price, ready = simple_negotiation_bot(user_input, DEFAULT_PARAMS)
+    # LLM-Verlauf vorbereiten (role/content)
+    llm_history = [
+        {"role": m["role"], "content": m["text"]}
+        for m in st.session_state["history"]
+    ]
 
+    # KI-Antwort generieren
+    bot_text = generate_reply(llm_history, st.session_state.params)
+
+    # Bot-Antwort speichern
     st.session_state["history"].append({
         "role": "assistant",
-        "text": reply,
+        "text": bot_text,
         "ts": datetime.now().isoformat(timespec="seconds"),
     })
 
-    # Deal-Preis für Button merken
-    if ready and proposed_price is not None:
-        st.session_state["agreed_price"] = int(proposed_price)
+    # Deal-Preis aus User-Angebot ableiten (wie vorherige Logik: Angebot >= min_price)
+    offered = None
+    raw = user_input.lower().replace("€", "").replace("eur", "")
+    nums = re.findall(r"\d{2,5}", raw)
+    if nums:
+        try:
+            offered = int(nums[0])
+        except ValueError:
+            offered = None
+
+    if offered is not None and offered >= st.session_state.params["min_price"]:
+        st.session_state["agreed_price"] = offered
     else:
         st.session_state["agreed_price"] = None
 
-# 4) Chat-Verlauf anzeigen (jetzt inkl. frisch hinzugefügter Bot-Antwort)
+# 4) Chat-Verlauf anzeigen (inkl. frischer Bot-Antwort)
 for item in st.session_state["history"]:
     side = "right" if item["role"] == "user" else "left"
     klass = "msg-user" if item["role"] == "user" else "msg-bot"
