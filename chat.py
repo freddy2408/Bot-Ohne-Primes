@@ -179,6 +179,8 @@ def call_openai(messages, temperature=0.3, max_tokens=240):
 
 
 def generate_reply(history, params: dict) -> str:
+    WRONG_CAPACITY_PATTERN = r"\b(32|64|128|512|800|1000|1tb|2tb)\s?gb\b"
+
     """
     LLM-Antwort mit System-Prompt und Regelprüfung (Power-Primes, Preis-Floor).
     """
@@ -190,6 +192,11 @@ def generate_reply(history, params: dict) -> str:
     def violates_rules(text: str) -> str | None:
         if contains_power_primes(text):
             return "Keine Macht-/Knappheits-/Autoritäts-Frames verwenden."
+        
+            # NEU: falsche Speichergrößen blockieren
+    if re.search(WRONG_CAPACITY_PATTERN, text.lower()):
+        return "Falsche Speichergröße. Du darfst nur 256 GB nennen."
+
         prices = extract_prices(text)
         if any(p < params["min_price"] for p in prices):
             return f"Unterschreite nie {params['min_price']} €; mache kein Angebot darunter."
@@ -210,6 +217,10 @@ def generate_reply(history, params: dict) -> str:
         ]
         reply = call_openai(history2, temperature=0.25, max_tokens=220)
         reason = violates_rules(reply)
+
+# NEU: automatische Korrektur restlicher falscher Speichergrößen
+reply = re.sub(WRONG_CAPACITY_PATTERN, "256 GB", reply, flags=re.IGNORECASE)
+
 
     if reason:
         prices = extract_prices(reply)
