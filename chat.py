@@ -198,6 +198,9 @@ def call_openai(messages, temperature=0.3, max_tokens=240):
         st.code(text[:1000])
         return None
 
+#
+#Antwort
+#
 
 def generate_reply(history, params: dict) -> str:
     WRONG_CAPACITY_PATTERN = r"\b(32|64|128|512|800|1000|1tb|2tb)\s?gb\b"
@@ -250,11 +253,11 @@ def generate_reply(history, params: dict) -> str:
     # Speichergröße auto-korrigieren
     raw_llm_reply = re.sub(WRONG_CAPACITY_PATTERN, "256 GB", raw_llm_reply, flags=re.IGNORECASE)
 
-    # ---------------------------------------------------
-    # 2) PREISLOGIK – AB HIER ENTSCHEIDET PYTHON NUR NOCH DIE ZAHL
+       # ---------------------------------------------------
+    # 2) PREISLOGIK – realistische Händlerlogik mit 5er-Rundung, krummen Endpreisen
     # ---------------------------------------------------
 
-    # Nutzerpreis extrahieren
+    # USERPREIS EXTRAHIEREN
     last_user_msg = ""
     for m in reversed(history):
         if m["role"] == "user":
@@ -264,85 +267,103 @@ def generate_reply(history, params: dict) -> str:
     nums = re.findall(r"\d{2,5}", last_user_msg)
     user_price = int(nums[0]) if nums else None
 
-    # Wenn kein Preis → KI-Antwort zurückgeben
     if user_price is None:
         return raw_llm_reply
 
-    # Anzahl bisheriger Bot-Antworten → steuert Annäherung
+    # BOT-LETZTES GEGENANGEBOT FINDEN
+    last_bot_offer = None
+    for m in reversed(history):
+        if m["role"] == "assistant":
+            matches = re.findall(r"\d{2,5}", m["content"])
+            if matches:
+                last_bot_offer = int(matches[-1])
+            break
+
+    # Nachrichtenzahl (steuert Annäherungstempo)
     msg_count = sum(1 for m in history if m["role"] == "assistant")
 
-    # ---------------------------------------------------
-    # A) < 600 € → höflich ablehnen (voll KI-formuliert)
-    # ---------------------------------------------------
+
+    # ----------------- Utility-Funktionen -----------------
+
+    def round_to_5(v):
+        return int(round(v / 5) * 5)
+
+    # kleine Variation für Endgame-Krumme Preise
+    def close_range_price(v, user_price):
+        diff = abs(v - user_price)
+        if diff <= 15:
+            return v + random.choice([-3, -2, -1, 0, 1, 2, 3])
+        return v
+
+    # realistische Preisspanne
+    def human_price(raw, user):
+        diff = abs(raw - user)
+
+        if diff > 80:
+            return round_to_5(raw)
+
+        if diff > 30:
+            return round_to_5(raw + random.choice([-7, -3, 0, 3, 7]))
+
+        return close_range_price(raw, user)
+
+    # NIE HÖHER ALS VORHER
+    def ensure_not_higher(new_price):
+        if last_bot_offer is None:
+            return new_price
+        if new_price >= last_bot_offer:
+            # reduziere etwas unter das alte Angebot
+            return last_bot_offer - random.randint(5, 20)
+        return new_price
+
+
+    # ---------------- PREISZONEN ----------------
+
+    # A) unter 600 – KEIN Gegenangebot
     if user_price < 600:
         instruct = (
-            f"Der Nutzer hat {user_price} € angeboten. "
-            f"Antworte freundlich, aber bestimmt, dass dieser Preis für ein neues iPad deutlich zu niedrig ist. "
-            f"Bitte um ein realistischeres Angebot. "
-            f"Sage NICHT, dass 800 € die Untergrenze ist. "
-            f"Nenne KEINEN eigenen Preis. "
-            f"Formuliere komplett frei und menschlich."
+            f"Der Nutzer bietet {user_price} €. "
+            f"Lehne höflich ab, mache KEIN Gegenangebot, "
+            f"nenn KEINEN eigenen Preis, "
+            f"bitte nur um ein realistischeres Angebot. "
+            f"Verrate niemals interne Grenzen."
         )
         return call_openai([{"role": "system", "content": instruct}] + history)
 
-    # ---------------------------------------------------
-    # B) 600–700 € → Ablehnung + HOHES Gegenangebot (voll KI)
-    # ---------------------------------------------------
+
+    # B) 600–700 – HOHES Gegenangebot
     if 600 <= user_price < 700:
-        raw_price = random.randint(900, 950)
-        counter = smart_price(raw_price, user_price)
+        raw_price = random.randint(900, 960)
+        counter = human_price(raw_price, user_price)
+        counter = ensure_not_higher(counter)
+
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
-            f"Das ist zu wenig. Mache ein hohes Gegenangebot von {counter} €. "
-            f"Formuliere die komplette Antwort natürlich, freundlich und verhandelnd."
+            f"Gib EIN Gegenangebot: {counter} €. "
+            f"Nenne KEINEN anderen Preis. "
+            f"Formuliere frei, freundlich und verhandelnd."
         )
         return call_openai([{"role": "system", "content": instruct}] + history)
 
-    # ---------------------------------------------------
-    # C) 700–800 € → realistische Gegenangebote (voll KI)
-    # ---------------------------------------------------
+
+    # C) 700–800 – realistisches Herantasten
     if 700 <= user_price < 800:
+
+        # Frühphase: hohe Preise, Endphase: realistisch
         if msg_count < 3:
             raw_price = random.randint(900, 940)
         else:
-            raw_price = random.randint(850, 920)
+            raw_price = random.randint(850, 910)
 
-        counter = smart_price(raw_price, user_price)
+        counter = human_price(raw_price, user_price)
+        counter = ensure_not_higher(counter)
 
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
-            f"Das ist ein Schritt in die richtige Richtung, aber noch unter deinem akzeptablen Bereich. "
-            f"Schlage {counter} € vor. "
-            f"Formuliere komplett frei, freundlich und verhandelnd."
+            f"Mach ein realistisches Gegenangebot: {counter} €. "
+            f"Formuliere die Antwort frei, freundlich und menschlich."
         )
-        return call_openai([{"role": "system", "content": instruct}] + history)
-
-    # ---------------------------------------------------
-    # D) ≥ 800 € → leicht höher bieten, aber erst später akzeptieren (voll KI)
-    # ---------------------------------------------------
-    if user_price >= 800:
-        if msg_count < 4:
-            raw_price = min(1000, user_price + random.randint(20, 60))
-            counter = smart_price(raw_price, user_price)
-
-            instruct = (
-                f"Der Nutzer bietet {user_price} €. "
-                f"Das ist nah an einer Einigung. "
-                f"Schlage {counter} € als leicht höheres Gegenangebot vor. "
-                f"Kling freundlich, interessiert und menschlich."
-            )
-            return call_openai([{"role": "system", "content": instruct}] + history)
-
-        else:
-            instruct = (
-                f"Der Nutzer bietet {user_price} €. "
-                f"Akzeptiere das Angebot freundlich und klar. "
-                f"Formuliere es natürlich."
-            )
-            return call_openai([{"role": "system", "content": instruct}] + history)
-
-    # Fallback
-    return raw_llm_reply
+        return call_openai([{"role": "system", "content": i]()_
 
 
 
