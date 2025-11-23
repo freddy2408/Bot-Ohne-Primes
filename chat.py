@@ -183,59 +183,115 @@ def generate_reply(history, params: dict) -> str:
 
     sys_msg = {"role": "system", "content": system_prompt(params)}
     reply = call_openai([sys_msg] + history)
+
     if not isinstance(reply, str):
         return "Entschuldigung, gerade gab es ein technisches Problem. Bitte versuchen Sie es erneut."
 
+    # ---------------------------------------------------
+    # Interne Regelprüfung (Power-Primes, Speichergrößen)
+    # ---------------------------------------------------
     def violates_rules(text: str) -> str | None:
-        # Macht-/Knappheitsframes blockieren
         if contains_power_primes(text):
             return "Keine Macht-/Knappheits-/Autoritäts-Frames verwenden."
 
-        # Falsche Speichergrößen blockieren
         if re.search(WRONG_CAPACITY_PATTERN, text.lower()):
             return "Falsche Speichergröße. Du darfst nur 256 GB nennen."
 
-        # Preise prüfen
         prices = extract_prices(text)
         if any(p < params["min_price"] for p in prices):
             return f"Unterschreite nie {params['min_price']} €; mache kein Angebot darunter."
-
         return None
 
-    # Regelverstöße abfangen
+    # Wenn LLM Regelverstöße macht → Korrekturversuche
     reason = violates_rules(reply)
     attempts = 0
+
     while reason and attempts < 2:
         attempts += 1
-        history2 = [sys_msg] + history + [
-            {
-                "role": "system",
-                "content": (
-                    f"REGEL-VERSTOSS: {reason} Antworte neu – freundlich, "
-                    f"verhandelnd, in {params['max_sentences']} Sätzen."
-                ),
-            }
-        ]
+        history2 = [sys_msg] + history + [{
+            "role": "system",
+            "content": (
+                f"REGEL-VERSTOSS: {reason} "
+                f"Antworte neu – freundlich, verhandelnd, in {params['max_sentences']} Sätzen."
+            ),
+        }]
         reply = call_openai(history2, temperature=0.25, max_tokens=220)
         reason = violates_rules(reply)
 
     # Automatische Korrektur falscher Speichergrößen
     reply = re.sub(WRONG_CAPACITY_PATTERN, "256 GB", reply, flags=re.IGNORECASE)
 
-    # Wenn nach Korrekturen noch Regeln verletzt werden → Preis korrigieren
-    if reason:
-        prices = extract_prices(reply)
-        low_prices = [p for p in prices if p < params["min_price"]]
-        if low_prices:
-            reply = re.sub(
-                PRICE_RE,
-                lambda m: m.group(0) if int(m.group(1)) >= params["min_price"] else str(params["min_price"]),
-                reply,
+    # ---------------------------------------------------
+    # NEU: Logische Gegenangebots-Logik basierend auf Nutzerangebot
+    # ---------------------------------------------------
+
+    # 1) Nutzerpreis extrahieren
+    last_user_msg = ""
+    for m in reversed(history):
+        if m["role"] == "user":
+            last_user_msg = m["content"].lower()
+            break
+
+    nums = re.findall(r"\d{2,5}", last_user_msg)
+    user_price = int(nums[0]) if nums else None
+
+    # Anzahl Nachrichten → steuert Annäherung
+    msg_count = sum(1 for m in history if m["role"] == "assistant")
+
+    # Wenn kein Preis → einfach LLM-Antwort zurückgeben
+    if user_price is None:
+        return reply
+
+    # ------------------ PREISLOGIK --------------------
+    # A) < 600 €
+    if user_price < 600:
+        return (
+            "Danke für dein Angebot! Für ein neues iPad in diesem Zustand liegt das allerdings deutlich zu niedrig. "
+            "Vielleicht hast du ein realistischeres Angebot?"
+        )
+
+    # B) 600–700 €
+    if 600 <= user_price < 700:
+        # Erste Gegenangebote sollen WEIT OBEN bleiben
+        counter = random.randint(900, 950)
+        return (
+            f"Ich schätze dein Angebot, aber {user_price} € sind für dieses neue Gerät leider noch zu wenig. "
+            f"Wie wäre es mit {counter} € als Annäherung?"
+        )
+
+    # C) 700–800 €
+    if 700 <= user_price < 800:
+        # Erste 2–3 Antworten → hoch bleiben
+        if msg_count < 3:
+            counter = random.randint(900, 940)
+        else:
+            counter = random.randint(850, 900)
+
+        return (
+            f"Danke, das kommt schon näher. Ganz dort bin ich aber noch nicht. "
+            f"Könnten wir uns vielleicht bei {counter} € treffen?"
+        )
+
+    # D) ≥ 800 €
+    if user_price >= 800:
+        # Noch nicht sofort akzeptieren → leicht höher gehen
+        if msg_count < 4:
+            # leicht höheres Gegenangebot, aber realistisch
+            counter = min(1000, user_price + random.randint(20, 60))
+            if counter <= user_price:  # Sicherheit
+                counter = user_price + 30
+            return (
+                f"Das klingt schon sehr vernünftig. Wenn wir uns bei {counter} € einigen könnten, "
+                "wäre das für mich ideal. Wäre das für dich denkbar?"
             )
-        for pat in BAD_PATTERNS:
-            reply = re.sub(pat, "", reply, flags=re.IGNORECASE)
+        else:
+            # nach einigen Runden → akzeptieren
+            return (
+                f"Perfekt, {user_price} € klingt gut für mich. Dann können wir uns gerne darauf einigen!"
+            )
 
     return reply
+
 
 
 # -----------------------------
