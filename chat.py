@@ -206,6 +206,7 @@ def generate_reply(history, params: dict) -> str:
     return None
 
 
+
     reason = violates_rules(reply)
     attempts = 0
     while reason and attempts < 2:
