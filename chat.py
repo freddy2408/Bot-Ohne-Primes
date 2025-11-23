@@ -190,17 +190,21 @@ def generate_reply(history, params: dict) -> str:
         return "Entschuldigung, gerade gab es ein technisches Problem. Bitte versuchen Sie es erneut."
 
     def violates_rules(text: str) -> str | None:
-        if contains_power_primes(text):
-            return "Keine Macht-/Knappheits-/Autoritäts-Frames verwenden."
-        
-            # NEU: falsche Speichergrößen blockieren
-        if re.search(WRONG_CAPACITY_PATTERN, text.lower()):
-            return "Falsche Speichergröße. Du darfst nur 256 GB nennen."
+    # Macht-/Knappheitsframes blockieren
+    if contains_power_primes(text):
+        return "Keine Macht-/Knappheits-/Autoritäts-Frames verwenden."
 
-        prices = extract_prices(text)
-        if any(p < params["min_price"] for p in prices):
-            return f"Unterschreite nie {params['min_price']} €; mache kein Angebot darunter."
-        return None
+    # falsche Speichergrößen blockieren
+    if re.search(WRONG_CAPACITY_PATTERN, text.lower()):
+        return "Falsche Speichergröße. Du darfst nur 256 GB nennen."
+
+    # Preise prüfen
+    prices = extract_prices(text)
+    if any(p < params["min_price"] for p in prices):
+        return f"Unterschreite nie {params['min_price']} €; mache kein Angebot darunter."
+
+    return None
+
 
     reason = violates_rules(reply)
     attempts = 0
