@@ -191,17 +191,17 @@ def generate_reply(history, params: dict) -> str:
 
     def violates_rules(text: str) -> str | None:
     # Macht-/Knappheitsframes blockieren
-    if contains_power_primes(text):
-        return "Keine Macht-/Knappheits-/Autoritäts-Frames verwenden."
+        if contains_power_primes(text):
+            return "Keine Macht-/Knappheits-/Autoritäts-Frames verwenden."
 
-    # falsche Speichergrößen blockieren
-    if re.search(WRONG_CAPACITY_PATTERN, text.lower()):
-        return "Falsche Speichergröße. Du darfst nur 256 GB nennen."
+        # falsche Speichergrößen blockieren
+        if re.search(WRONG_CAPACITY_PATTERN, text.lower()):
+            return "Falsche Speichergröße. Du darfst nur 256 GB nennen."
 
-    # Preise prüfen
-    prices = extract_prices(text)
-    if any(p < params["min_price"] for p in prices):
-        return f"Unterschreite nie {params['min_price']} €; mache kein Angebot darunter."
+        # Preise prüfen
+        prices = extract_prices(text)
+        if any(p < params["min_price"] for p in prices):
+            return f"Unterschreite nie {params['min_price']} €; mache kein Angebot darunter."
 
     return None
 
