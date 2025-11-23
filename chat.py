@@ -202,6 +202,17 @@ def call_openai(messages, temperature=0.3, max_tokens=240):
 def generate_reply(history, params: dict) -> str:
     WRONG_CAPACITY_PATTERN = r"\b(32|64|128|512|800|1000|1tb|2tb)\s?gb\b"
 
+        # Utility: Rundet auf 5er Schritte
+    def round_to_5(value: int) -> int:
+        return int(round(value / 5) * 5)
+
+    # Utility: am Ende der Verhandlung (Differenz ≤ 15 €) krumme Zahlen erlauben
+    def smart_price(value: int, user_price: int, threshold: int = 15) -> int:
+        if abs(value - user_price) <= threshold:
+            return value   # krumme Zahl erlaubt
+        return round_to_5(value)
+
+
     # 1) Grundantwort vom LLM (wird später überschrieben, falls Preislogik greift)
     sys_msg = {"role": "system", "content": system_prompt(params)}
 
@@ -278,7 +289,8 @@ def generate_reply(history, params: dict) -> str:
     # B) 600–700 € → Ablehnung + HOHES Gegenangebot (voll KI)
     # ---------------------------------------------------
     if 600 <= user_price < 700:
-        counter = random.randint(900, 950)
+        raw_price = random.randint(900, 950)
+        counter = smart_price(raw_price, user_price)
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
             f"Das ist zu wenig. Mache ein hohes Gegenangebot von {counter} €. "
@@ -291,9 +303,11 @@ def generate_reply(history, params: dict) -> str:
     # ---------------------------------------------------
     if 700 <= user_price < 800:
         if msg_count < 3:
-            counter = random.randint(900, 940)
+            raw_price = random.randint(900, 940)
         else:
-            counter = random.randint(850, 900)
+            raw_price = random.randint(850, 920)
+
+        counter = smart_price(raw_price, user_price)
 
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
@@ -308,7 +322,9 @@ def generate_reply(history, params: dict) -> str:
     # ---------------------------------------------------
     if user_price >= 800:
         if msg_count < 4:
-            counter = min(1000, user_price + random.randint(20, 60))
+            raw_price = min(1000, user_price + random.randint(20, 60))
+            counter = smart_price(raw_price, user_price)
+
             instruct = (
                 f"Der Nutzer bietet {user_price} €. "
                 f"Das ist nah an einer Einigung. "
