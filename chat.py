@@ -363,7 +363,7 @@ def generate_reply(history, params: dict) -> str:
             f"Mach ein realistisches Gegenangebot: {counter} €. "
             f"Formuliere die Antwort frei, freundlich und menschlich."
         )
-        return call_openai([{"role": "system", "content": i]()_
+        return call_openai([{"role": "system", "content": instruct}] + history)
 
 
 
