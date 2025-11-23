@@ -181,20 +181,17 @@ def call_openai(messages, temperature=0.3, max_tokens=240):
 def generate_reply(history, params: dict) -> str:
     WRONG_CAPACITY_PATTERN = r"\b(32|64|128|512|800|1000|1tb|2tb)\s?gb\b"
 
-    """
-    LLM-Antwort mit System-Prompt und Regelprüfung (Power-Primes, Preis-Floor).
-    """
     sys_msg = {"role": "system", "content": system_prompt(params)}
     reply = call_openai([sys_msg] + history)
     if not isinstance(reply, str):
         return "Entschuldigung, gerade gab es ein technisches Problem. Bitte versuchen Sie es erneut."
 
     def violates_rules(text: str) -> str | None:
-    # Macht-/Knappheitsframes blockieren
+        # Macht-/Knappheitsframes blockieren
         if contains_power_primes(text):
             return "Keine Macht-/Knappheits-/Autoritäts-Frames verwenden."
 
-        # falsche Speichergrößen blockieren
+        # Falsche Speichergrößen blockieren
         if re.search(WRONG_CAPACITY_PATTERN, text.lower()):
             return "Falsche Speichergröße. Du darfst nur 256 GB nennen."
 
@@ -205,8 +202,7 @@ def generate_reply(history, params: dict) -> str:
 
         return None
 
-
-
+    # Regelverstöße abfangen
     reason = violates_rules(reply)
     attempts = 0
     while reason and attempts < 2:
@@ -223,10 +219,10 @@ def generate_reply(history, params: dict) -> str:
         reply = call_openai(history2, temperature=0.25, max_tokens=220)
         reason = violates_rules(reply)
 
-# NEU: automatische Korrektur restlicher falscher Speichergrößen
-reply = re.sub(WRONG_CAPACITY_PATTERN, "256 GB", reply, flags=re.IGNORECASE)
+    # Automatische Korrektur falscher Speichergrößen
+    reply = re.sub(WRONG_CAPACITY_PATTERN, "256 GB", reply, flags=re.IGNORECASE)
 
-
+    # Wenn nach Korrekturen noch Regeln verletzt werden → Preis korrigieren
     if reason:
         prices = extract_prices(reply)
         low_prices = [p for p in prices if p < params["min_price"]]
