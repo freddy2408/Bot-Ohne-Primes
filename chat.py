@@ -194,8 +194,8 @@ def generate_reply(history, params: dict) -> str:
             return "Keine Macht-/Knappheits-/Autoritäts-Frames verwenden."
         
             # NEU: falsche Speichergrößen blockieren
-    if re.search(WRONG_CAPACITY_PATTERN, text.lower()):
-        return "Falsche Speichergröße. Du darfst nur 256 GB nennen."
+        if re.search(WRONG_CAPACITY_PATTERN, text.lower()):
+            return "Falsche Speichergröße. Du darfst nur 256 GB nennen."
 
         prices = extract_prices(text)
         if any(p < params["min_price"] for p in prices):
