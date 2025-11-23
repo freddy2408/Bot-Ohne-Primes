@@ -202,116 +202,130 @@ def call_openai(messages, temperature=0.3, max_tokens=240):
 def generate_reply(history, params: dict) -> str:
     WRONG_CAPACITY_PATTERN = r"\b(32|64|128|512|800|1000|1tb|2tb)\s?gb\b"
 
+    # 1) Grundantwort vom LLM (wird später überschrieben, falls Preislogik greift)
     sys_msg = {"role": "system", "content": system_prompt(params)}
-    reply = call_openai([sys_msg] + history)
 
-    if not isinstance(reply, str):
-        return "Entschuldigung, gerade gab es ein technisches Problem. Bitte versuchen Sie es erneut."
+    # LLM-Antwort einholen
+    raw_llm_reply = call_openai([sys_msg] + history)
+    if not isinstance(raw_llm_reply, str):
+        raw_llm_reply = "Es gab einen kleinen technischen Fehler. Bitte frage nochmal. 😊"
 
     # ---------------------------------------------------
-    # Interne Regelprüfung (Power-Primes, Speichergrößen)
+    # REGELPRÜFUNG
     # ---------------------------------------------------
     def violates_rules(text: str) -> str | None:
         if contains_power_primes(text):
             return "Keine Macht-/Knappheits-/Autoritäts-Frames verwenden."
-
         if re.search(WRONG_CAPACITY_PATTERN, text.lower()):
-            return "Falsche Speichergröße. Du darfst nur 256 GB nennen."
-
-        prices = extract_prices(text)
-        if any(p < params["min_price"] for p in prices):
-            return f"Unterschreite nie {params['min_price']} €; mache kein Angebot darunter."
+            return "Falsche Speichergröße. Verwende ausschließlich 256 GB."
         return None
 
-    # Wenn LLM Regelverstöße macht → Korrekturversuche
-    reason = violates_rules(reply)
+    reason = violates_rules(raw_llm_reply)
     attempts = 0
 
     while reason and attempts < 2:
         attempts += 1
-        history2 = [sys_msg] + history + [{
+        retry_prompt = {
             "role": "system",
             "content": (
-                f"REGEL-VERSTOSS: {reason} "
-                f"Antworte neu – freundlich, verhandelnd, in {params['max_sentences']} Sätzen."
-            ),
-        }]
-        reply = call_openai(history2, temperature=0.25, max_tokens=220)
-        reason = violates_rules(reply)
+                f"REGEL-VERSTOSS: {reason}. "
+                f"Formuliere die Antwort komplett neu, freundlich und verhandelnd, "
+                f"maximal {params['max_sentences']} Sätze."
+            )
+        }
+        raw_llm_reply = call_openai([retry_prompt] + history)
+        reason = violates_rules(raw_llm_reply)
 
-    # Automatische Korrektur falscher Speichergrößen
-    reply = re.sub(WRONG_CAPACITY_PATTERN, "256 GB", reply, flags=re.IGNORECASE)
+    # Speichergröße auto-korrigieren
+    raw_llm_reply = re.sub(WRONG_CAPACITY_PATTERN, "256 GB", raw_llm_reply, flags=re.IGNORECASE)
 
     # ---------------------------------------------------
-    # NEU: Logische Gegenangebots-Logik basierend auf Nutzerangebot
+    # 2) PREISLOGIK – AB HIER ENTSCHEIDET PYTHON NUR NOCH DIE ZAHL
     # ---------------------------------------------------
 
-    # 1) Nutzerpreis extrahieren
+    # Nutzerpreis extrahieren
     last_user_msg = ""
     for m in reversed(history):
         if m["role"] == "user":
-            last_user_msg = m["content"].lower()
+            last_user_msg = m["content"]
             break
 
     nums = re.findall(r"\d{2,5}", last_user_msg)
     user_price = int(nums[0]) if nums else None
 
-    # Anzahl Nachrichten → steuert Annäherung
+    # Wenn kein Preis → KI-Antwort zurückgeben
+    if user_price is None:
+        return raw_llm_reply
+
+    # Anzahl bisheriger Bot-Antworten → steuert Annäherung
     msg_count = sum(1 for m in history if m["role"] == "assistant")
 
-    # Wenn kein Preis → einfach LLM-Antwort zurückgeben
-    if user_price is None:
-        return reply
-
-    # ------------------ PREISLOGIK --------------------
-    # A) < 600 €
+    # ---------------------------------------------------
+    # A) < 600 € → höflich ablehnen (voll KI-formuliert)
+    # ---------------------------------------------------
     if user_price < 600:
-        return (
-            "Danke für dein Angebot! Für ein neues iPad in diesem Zustand liegt das allerdings deutlich zu niedrig. "
-            "Vielleicht hast du ein realistischeres Angebot?"
+        instruct = (
+            f"Der Nutzer hat {user_price} € angeboten. "
+            f"Antworte freundlich, aber bestimmt, dass dieser Preis für ein neues iPad deutlich zu niedrig ist. "
+            f"Bitte um ein realistischeres Angebot. "
+            f"Formuliere komplett frei und menschlich."
         )
+        return call_openai([{"role": "system", "content": instruct}] + history)
 
-    # B) 600–700 €
+    # ---------------------------------------------------
+    # B) 600–700 € → Ablehnung + HOHES Gegenangebot (voll KI)
+    # ---------------------------------------------------
     if 600 <= user_price < 700:
-        # Erste Gegenangebote sollen WEIT OBEN bleiben
         counter = random.randint(900, 950)
-        return (
-            f"Ich schätze dein Angebot, aber {user_price} € sind für dieses neue Gerät leider noch zu wenig. "
-            f"Wie wäre es mit {counter} € als Annäherung?"
+        instruct = (
+            f"Der Nutzer bietet {user_price} €. "
+            f"Das ist zu wenig. Mache ein hohes Gegenangebot von {counter} €. "
+            f"Formuliere die komplette Antwort natürlich, freundlich und verhandelnd."
         )
+        return call_openai([{"role": "system", "content": instruct}] + history)
 
-    # C) 700–800 €
+    # ---------------------------------------------------
+    # C) 700–800 € → realistische Gegenangebote (voll KI)
+    # ---------------------------------------------------
     if 700 <= user_price < 800:
-        # Erste 2–3 Antworten → hoch bleiben
         if msg_count < 3:
             counter = random.randint(900, 940)
         else:
             counter = random.randint(850, 900)
 
-        return (
-            f"Danke, das kommt schon näher. Ganz dort bin ich aber noch nicht. "
-            f"Könnten wir uns vielleicht bei {counter} € treffen?"
+        instruct = (
+            f"Der Nutzer bietet {user_price} €. "
+            f"Das ist ein Schritt in die richtige Richtung, aber noch unter deinem akzeptablen Bereich. "
+            f"Schlage {counter} € vor. "
+            f"Formuliere komplett frei, freundlich und verhandelnd."
         )
+        return call_openai([{"role": "system", "content": instruct}] + history)
 
-    # D) ≥ 800 €
+    # ---------------------------------------------------
+    # D) ≥ 800 € → leicht höher bieten, aber erst später akzeptieren (voll KI)
+    # ---------------------------------------------------
     if user_price >= 800:
-        # Noch nicht sofort akzeptieren → leicht höher gehen
         if msg_count < 4:
-            # leicht höheres Gegenangebot, aber realistisch
             counter = min(1000, user_price + random.randint(20, 60))
-            if counter <= user_price:  # Sicherheit
-                counter = user_price + 30
-            return (
-                f"Das klingt schon sehr vernünftig. Wenn wir uns bei {counter} € einigen könnten, "
-                "wäre das für mich ideal. Wäre das für dich denkbar?"
+            instruct = (
+                f"Der Nutzer bietet {user_price} €. "
+                f"Das ist nah an einer Einigung. "
+                f"Schlage {counter} € als leicht höheres Gegenangebot vor. "
+                f"Kling freundlich, interessiert und menschlich."
             )
-        else:
-            # nach einigen Runden → akzeptieren
-            return (
-                f"Perfekt, {user_price} € klingt gut für mich. Dann können wir uns gerne darauf einigen!"
-            )
+            return call_openai([{"role": "system", "content": instruct}] + history)
 
-    return reply
+        else:
+            instruct = (
+                f"Der Nutzer bietet {user_price} €. "
+                f"Akzeptiere das Angebot freundlich und klar. "
+                f"Formuliere es natürlich."
+            )
+            return call_openai([{"role": "system", "content": instruct}] + history)
+
+    # Fallback
+    return raw_llm_reply
+
 
 
 
