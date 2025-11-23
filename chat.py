@@ -268,6 +268,8 @@ def generate_reply(history, params: dict) -> str:
             f"Der Nutzer hat {user_price} € angeboten. "
             f"Antworte freundlich, aber bestimmt, dass dieser Preis für ein neues iPad deutlich zu niedrig ist. "
             f"Bitte um ein realistischeres Angebot. "
+            f"Sage NICHT, dass 800 € die Untergrenze ist. "
+            f"Nenne KEINEN eigenen Preis. "
             f"Formuliere komplett frei und menschlich."
         )
         return call_openai([{"role": "system", "content": instruct}] + history)
