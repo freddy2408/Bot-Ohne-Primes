@@ -203,7 +203,7 @@ def generate_reply(history, params: dict) -> str:
         if any(p < params["min_price"] for p in prices):
             return f"Unterschreite nie {params['min_price']} €; mache kein Angebot darunter."
 
-    return None
+        return None
 
 
 
