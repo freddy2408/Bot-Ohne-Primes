@@ -563,27 +563,35 @@ if user_input and not st.session_state["closed"]:
     else:
         st.session_state["agreed_price"] = None
 
-# 4) Chat-Verlauf anzeigen (inkl. frischer Bot-Antwort)
+# 4) Chat-Verlauf anzeigen (inkl. frischer Bot-Antwort) 
+# Profilbilder laden
+BOT_AVATAR  = img_to_base64("bot.png")
+USER_AVATAR = img_to_base64("user.png")
+
 for item in st.session_state["history"]:
-    side = "right" if item["role"] == "user" else "left"
-    klass = "msg-user" if item["role"] == "user" else "msg-bot"
-    
-    avatar = "user.png" if item["role"] == "user" else "bot.png"
+    role = item["role"]
+    text = item["text"]
+    ts = item["ts"]
+
+    is_user = (role == "user")
+
+    avatar_b64 = USER_AVATAR if is_user else BOT_AVATAR
+
+    side = "right" if is_user else "left"
+    klass = "msg-user" if is_user else "msg-bot"
 
     st.markdown(f"""
     <div class="row {side}">
-        {'<img src="user.png" class="avatar">' if side=='right' else f'<img src="{avatar}" class="avatar">'}
+        <img src="data:image/png;base64,{avatar_b64}" class="avatar">
         <div class="chat-bubble {klass}">
-            {item['text']}
+            {text}
         </div>
     </div>
     <div class="row {side}">
-        <div class="meta">{item['ts']}</div>
+        <div class="meta">{ts}</div>
     </div>
     """, unsafe_allow_html=True)
 
-
-st.markdown("<hr class='soft'/>", unsafe_allow_html=True)
 
 # 5) Deal bestätigen / Abbrechen
 deal_col1, deal_col2 = st.columns([1, 1])
