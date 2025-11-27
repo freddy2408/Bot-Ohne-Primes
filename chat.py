@@ -257,17 +257,16 @@ def generate_reply(history, params: dict) -> str:
 # ----------------------------------------
 # WEICHE MINDESTPREISREGEL
 # ----------------------------------------
-if user_price is not None and user_price < params["min_price"]:
-    # KI darf KEINEN Deal unterhalb der Mindestgrenze akzeptieren,
-    # aber weiterhin normal verhandeln oder Gegenangebote machen.
-    instruct = (
-        f"Der Nutzer bietet {user_price} €. "
-        f"Du darfst KEINEN Deal unter {params['min_price']} € akzeptieren. "
-        f"Reagiere freundlich, erkläre kurz warum dieser Preis zu niedrig ist "
-        f"und mache optional ein realistisch höheres Gegenangebot."
-    )
-    history = [{"role": "system", "content": instruct}] + history
-
+    if user_price is not None and user_price < params["min_price"]:
+        # KI darf KEINEN Deal unterhalb der Mindestgrenze akzeptieren,
+        # aber weiterhin normal verhandeln oder Gegenangebote machen.
+        instruct = (
+            f"Der Nutzer bietet {user_price} €. "
+            f"Du darfst KEINEN Deal unter {params['min_price']} € akzeptieren. "
+            f"Reagiere freundlich, erkläre kurz warum dieser Preis zu niedrig ist "
+            f"und mache optional ein realistisch höheres Gegenangebot."
+        )
+        history = [{"role": "system", "content": instruct}] + history
 
        # ---------------------------------------------------
     # 2) PREISLOGIK – realistische Händlerlogik mit 5er-Rundung, krummen Endpreisen
