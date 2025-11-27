@@ -10,6 +10,7 @@ import pandas as pd
 import time
 import sqlite3
 import base64
+import pytz
 
 #---
 
@@ -514,7 +515,7 @@ with st.container():
 st.caption(f"Session-ID: `{st.session_state.sid}`")
 
 # -----------------------------
-# [CHAT-UI – jetzt vollständig LLM-basiert]
+# [CHAT-UI – vollständig LLM-basiert]
 # -----------------------------
 st.subheader("💬 iPad Verhandlungs-Bot")
 
@@ -528,7 +529,8 @@ if len(st.session_state["history"]) == 0:
     st.session_state["history"].append({
         "role": "assistant",
         "text": first_msg,
-        "ts": datetime.now().isoformat(timespec="seconds"),
+        tz = pytz.timezone("Europe/Berlin")
+        "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
     })
 
 # 2) Eingabefeld
@@ -545,7 +547,8 @@ if user_input and not st.session_state["closed"]:
     st.session_state["history"].append({
         "role": "user",
         "text": user_input.strip(),
-        "ts": now,
+        tz = pytz.timezone("Europe/Berlin")
+        "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
     })
 
     # LLM-Verlauf vorbereiten (role/content)
@@ -561,7 +564,8 @@ if user_input and not st.session_state["closed"]:
     st.session_state["history"].append({
         "role": "assistant",
         "text": bot_text,
-        "ts": datetime.now().isoformat(timespec="seconds"),
+        tz = pytz.timezone("Europe/Berlin")
+        "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
     })
 
     # Bot-Gegenangebot extrahieren
