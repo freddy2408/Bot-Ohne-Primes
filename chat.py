@@ -382,6 +382,25 @@ def generate_reply(history, params: dict) -> str:
         return call_openai([{"role": "system", "content": instruct}] + history)
 
 
+    # D) 800+ – leicht höheres Gegenangebot, noch kein sofortiger Deal
+    if user_price >= 800:
+        # je nach Gesprächsphase konservativ starten
+        if msg_count < 3:
+            raw_price = user_price + random.randint(30, 60)
+        else:
+            raw_price = user_price + random.randint(15, 40)
+
+        counter = human_price(raw_price, user_price)
+        counter = ensure_not_higher(counter)
+
+        instruct = (
+            f"Der Nutzer bietet {user_price} €. "
+            f"Mach ein leicht höheres Gegenangebot: {counter} €. "
+            f"Formuliere freundlich, verhandelnd, maximal {params['max_sentences']} Sätze."
+        )
+        return call_openai([{"role": "system", "content": instruct}] + history)
+
+
 
 
 # -----------------------------
