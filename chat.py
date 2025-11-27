@@ -529,8 +529,7 @@ if len(st.session_state["history"]) == 0:
     st.session_state["history"].append({
         "role": "assistant",
         "text": first_msg,
-        tz = pytz.timezone("Europe/Berlin")
-        "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
+        "ts": datetime.now().isoformat(timespec="seconds"),
     })
 
 # 2) Eingabefeld
@@ -548,7 +547,7 @@ if user_input and not st.session_state["closed"]:
         "role": "user",
         "text": user_input.strip(),
         tz = pytz.timezone("Europe/Berlin")
-        "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
+        now = datetime.now(tz).strftime("%d.%m.%Y %H:%M")
     })
 
     # LLM-Verlauf vorbereiten (role/content)
@@ -565,7 +564,7 @@ if user_input and not st.session_state["closed"]:
         "role": "assistant",
         "text": bot_text,
         tz = pytz.timezone("Europe/Berlin")
-        "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
+        now = datetime.now(tz).strftime("%d.%m.%Y %H:%M")
     })
 
     # Bot-Gegenangebot extrahieren
