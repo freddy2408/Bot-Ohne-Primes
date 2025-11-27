@@ -667,29 +667,33 @@ else:
 
 if pwd_ok:
     st.sidebar.success("Zugang gewährt.")
+
     with st.sidebar.expander("Alle Verhandlungsergebnisse", expanded=True):
+
         df = load_results_df()
-if len(df) == 0:
-    st.write("Noch keine Ergebnisse gespeichert.")
-else:
-    # neue Nummerierung hinzufügen (1, 2, 3, ...)
-    df = df.reset_index(drop=True)
-    df["nr"] = df.index + 1
 
-    # Spaltenreihenfolge schöner machen
-    df = df[["nr", "ts", "session_id", "deal", "price", "msg_count"]]
+        if len(df) == 0:
+            st.write("Noch keine Ergebnisse gespeichert.")
 
-    st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            # neue Nummerierung hinzufügen (1, 2, 3, ...)
+            df = df.reset_index(drop=True)
+            df["nr"] = df.index + 1
 
-    from io import BytesIO
-    buffer = BytesIO()
-    df.to_excel(buffer, index=False)
-    buffer.seek(0)
+            # schönere Reihenfolge
+            df = df[["nr", "ts", "session_id", "deal", "price", "msg_count"]]
 
-    st.download_button(
-        "Excel herunterladen",
-        buffer,
-        file_name="verhandlungsergebnisse.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-    )
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            from io import BytesIO
+            buffer = BytesIO()
+            df.to_excel(buffer, index=False)
+            buffer.seek(0)
+
+            st.download_button(
+                "Excel herunterladen",
+                buffer,
+                file_name="verhandlungsergebnisse.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
