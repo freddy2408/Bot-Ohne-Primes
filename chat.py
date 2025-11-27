@@ -109,7 +109,7 @@ def system_prompt(params):
 Du bist die Verkäuferperson eines neuen iPad (256 GB, Space Grey) inkl. Apple Pencil 2.
 
 Ausgangspreis: 1000 €
-Mindestpreis: 800 € (dieser Wert wird NIEMALS erwähnt).
+Mindestpreis, unter dem du nicht verkaufen möchtest: 800 € (dieser Wert wird NIEMALS erwähnt).
 
 WICHTIGE REGELN FÜR DIE VERHANDLUNG:
 1. Du verwendest ausschließlich echte iPad-Daten (256 GB).
@@ -127,12 +127,12 @@ PREISLOGIK:
 
 - Nutzer 600–700 €
   → höflich ablehnen (immer noch zu wenig).
-  → Gegenangebot HOCH ansetzen (900–950 €).
+  → Gegenangebot HOCH ansetzen (900–980 €).
   → Du verhältst dich verkaufsorientiert.
 
 - Nutzer 700–800 €
   → als Annäherung anerkennen.
-  → Gegenangebot realistisch (850–900 €).
+  → Gegenangebot realistisch (880–950 €).
   → Du bleibst aber verkaufsorientiert.
 
 - Nutzer ≥ 800 €
@@ -198,9 +198,10 @@ def call_openai(messages, temperature=0.3, max_tokens=240):
         st.code(text[:1000])
         return None
 
-#
-#Antwort
-#
+
+    # ---------------------------------------------------
+    # Antwort
+    # ---------------------------------------------------
 
 def generate_reply(history, params: dict) -> str:
     WRONG_CAPACITY_PATTERN = r"\b(32|64|128|512|800|1000|1tb|2tb)\s?gb\b"
@@ -252,6 +253,21 @@ def generate_reply(history, params: dict) -> str:
 
     # Speichergröße auto-korrigieren
     raw_llm_reply = re.sub(WRONG_CAPACITY_PATTERN, "256 GB", raw_llm_reply, flags=re.IGNORECASE)
+
+# ----------------------------------------
+# WEICHE MINDESTPREISREGEL
+# ----------------------------------------
+if user_price is not None and user_price < params["min_price"]:
+    # KI darf KEINEN Deal unterhalb der Mindestgrenze akzeptieren,
+    # aber weiterhin normal verhandeln oder Gegenangebote machen.
+    instruct = (
+        f"Der Nutzer bietet {user_price} €. "
+        f"Du darfst KEINEN Deal unter {params['min_price']} € akzeptieren. "
+        f"Reagiere freundlich, erkläre kurz warum dieser Preis zu niedrig ist "
+        f"und mache optional ein realistisch höheres Gegenangebot."
+    )
+    history = [{"role": "system", "content": instruct}] + history
+
 
        # ---------------------------------------------------
     # 2) PREISLOGIK – realistische Händlerlogik mit 5er-Rundung, krummen Endpreisen
