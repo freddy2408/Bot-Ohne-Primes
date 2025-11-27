@@ -487,7 +487,7 @@ def load_results_df() -> pd.DataFrame:
     _init_db()
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query(
-        "SELECT ts, session_id, deal, price, msg_count FROM results ORDER BY id DESC",
+        "SELECT ts, session_id, deal, price, msg_count FROM results ORDER BY id ASC",
         conn,
     )
     conn.close()
@@ -697,3 +697,15 @@ if pwd_ok:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
+
+# RESET DER GESAMTEN DATENBANK (ALLE ERGEBNISSE LÖSCHEN)
+if st.sidebar.button("🗑️ Alle Ergebnisse löschen"):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM results")
+    conn.commit()
+    conn.close()
+    st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
+    st.experimental_rerun()
+
+
