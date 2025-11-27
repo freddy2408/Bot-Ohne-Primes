@@ -496,6 +496,13 @@ def load_results_df() -> pd.DataFrame:
     df["deal"] = df["deal"].map({1: "Deal", 0: "Abgebrochen"})
     return df
 
+def extract_price_from_bot(msg: str) -> int | None:
+    nums = re.findall(r"\d{2,5}", msg)
+    if not nums:
+        return None
+    return int(nums[-1])
+
+
 # -----------------------------
 # [Szenario-Kopf]
 # -----------------------------
@@ -557,20 +564,11 @@ if user_input and not st.session_state["closed"]:
         "ts": datetime.now().isoformat(timespec="seconds"),
     })
 
-    # Deal-Preis aus User-Angebot ableiten (wie vorherige Logik: Angebot >= min_price)
-    offered = None
-    raw = user_input.lower().replace("€", "").replace("eur", "")
-    nums = re.findall(r"\d{2,5}", raw)
-    if nums:
-        try:
-            offered = int(nums[0])
-        except ValueError:
-            offered = None
+    # Bot-Gegenangebot extrahieren
+    bot_offer = extract_price_from_bot(bot_text)
+    st.session_state["bot_offer"] = bot_offer
 
-    if offered is not None and offered >= st.session_state.params["min_price"]:
-        st.session_state["agreed_price"] = offered
-    else:
-        st.session_state["agreed_price"] = None
+
 
 # 4) Chat-Verlauf anzeigen (inkl. frischer Bot-Antwort) 
 # Profilbilder laden
@@ -602,23 +600,25 @@ for item in st.session_state["history"]:
     """, unsafe_allow_html=True)
 
 
-# 5) Deal bestätigen / Abbrechen
+# 5) Deal bestätigen / Verhandlung beenden
 deal_col1, deal_col2 = st.columns([1, 1])
+
+bot_offer = st.session_state.get("bot_offer", None)
+show_deal = (bot_offer is not None) and not st.session_state.get("closed", False)
+
 with deal_col1:
-    show_deal = (
-        st.session_state.get("agreed_price") is not None
-        and not st.session_state.get("closed", False)
-    )
     confirm = st.button(
-        f"✅ Deal bestätigen: {st.session_state.get('agreed_price')} €",
+        f"💚 Deal bestätigen: {bot_offer} €" if show_deal else "Deal bestätigen",
         use_container_width=True,
-    ) if show_deal else False
+        disabled=not show_deal
+    )
 
 with deal_col2:
     cancel = st.button(
-        "❌ Abbrechen",
+        "❌ Verhandlung beenden",
         use_container_width=True,
     ) if not st.session_state.get("closed", False) else False
+
 
 # 6) Abbrechen-Handler (weiter verhandeln erlaubt)
 if cancel and not st.session_state.get("closed", False):
@@ -626,22 +626,29 @@ if cancel and not st.session_state.get("closed", False):
     st.info("Deal abgebrochen. Du kannst weiter verhandeln.")
 
 # 7) Deal-Bestätigung → Ergebnis speichern
-if confirm and not st.session_state.get("closed", False) and st.session_state.get("agreed_price") is not None:
+if confirm and not st.session_state["closed"]:
     st.session_state["closed"] = True
-    msg_count = len([m for m in st.session_state.get("history", []) if m["role"] in ("user", "assistant")])
-    log_result(st.session_state["session_id"], True, int(st.session_state["agreed_price"]), msg_count)
-    st.success(f"Deal bestätigt: {st.session_state['agreed_price']} €. Die Verhandlung ist abgeschlossen.")
+
+    bot_price = st.session_state.get("bot_offer")
+    msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
+
+    log_result(st.session_state["session_id"], True, bot_price, msg_count)
+
+    st.success(f"Deal bestätigt: {bot_price} €. Die Verhandlung ist abgeschlossen.")
     st.stop()
 
+
 # 8) Verhandlung ohne Einigung beenden
-if not st.session_state.get("closed", False):
-    no_deal = st.button("🔒 Verhandlung beenden (ohne Einigung)")
-    if no_deal:
-        st.session_state["closed"] = True
-        msg_count = len([m for m in st.session_state.get("history", []) if m["role"] in ("user", "assistant")])
-        log_result(st.session_state["session_id"], False, None, msg_count)
-        st.info("Verhandlung beendet – ohne Einigung.")
-        st.stop()
+if cancel and not st.session_state["closed"]:
+    st.session_state["closed"] = True
+
+    msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
+
+    log_result(st.session_state["session_id"], False, None, msg_count)
+
+    st.info("Verhandlung beendet – ohne Einigung.")
+    st.stop()
+
 
 # -----------------------------
 # [ADMIN-BEREICH: Ergebnisse (privat)]
