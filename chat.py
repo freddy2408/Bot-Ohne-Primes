@@ -254,19 +254,7 @@ def generate_reply(history, params: dict) -> str:
     # Speichergröße auto-korrigieren
     raw_llm_reply = re.sub(WRONG_CAPACITY_PATTERN, "256 GB", raw_llm_reply, flags=re.IGNORECASE)
 
-# ----------------------------------------
-# WEICHE MINDESTPREISREGEL
-# ----------------------------------------
-    if user_price is not None and user_price < params["min_price"]:
-        # KI darf KEINEN Deal unterhalb der Mindestgrenze akzeptieren,
-        # aber weiterhin normal verhandeln oder Gegenangebote machen.
-        instruct = (
-            f"Der Nutzer bietet {user_price} €. "
-            f"Du darfst KEINEN Deal unter {params['min_price']} € akzeptieren. "
-            f"Reagiere freundlich, erkläre kurz warum dieser Preis zu niedrig ist "
-            f"und mache optional ein realistisch höheres Gegenangebot."
-        )
-        history = [{"role": "system", "content": instruct}] + history
+
 
        # ---------------------------------------------------
     # 2) PREISLOGIK – realistische Händlerlogik mit 5er-Rundung, krummen Endpreisen
@@ -297,6 +285,20 @@ def generate_reply(history, params: dict) -> str:
     # Nachrichtenzahl (steuert Annäherungstempo)
     msg_count = sum(1 for m in history if m["role"] == "assistant")
 
+
+# ----------------------------------------
+# WEICHE MINDESTPREISREGEL
+# ----------------------------------------
+    if user_price is not None and user_price < params["min_price"]:
+        # KI darf KEINEN Deal unterhalb der Mindestgrenze akzeptieren,
+        # aber weiterhin normal verhandeln oder Gegenangebote machen.
+        instruct = (
+            f"Der Nutzer bietet {user_price} €. "
+            f"Du darfst KEINEN Deal unter {params['min_price']} € akzeptieren. "
+            f"Reagiere freundlich, erkläre kurz warum dieser Preis zu niedrig ist "
+            f"und mache optional ein realistisch höheres Gegenangebot."
+        )
+        history = [{"role": "system", "content": instruct}] + history
 
     # ----------------- Utility-Funktionen -----------------
 
