@@ -519,6 +519,9 @@ st.caption(f"Session-ID: `{st.session_state.sid}`")
 # -----------------------------
 st.subheader("💬 iPad Verhandlungs-Bot")
 
+# Zeitzone definieren
+tz = pytz.timezone("Europe/Berlin")
+
 # 1) Initiale Bot-Nachricht einmalig
 if len(st.session_state["history"]) == 0:
     first_msg = (
@@ -529,7 +532,7 @@ if len(st.session_state["history"]) == 0:
     st.session_state["history"].append({
         "role": "assistant",
         "text": first_msg,
-        "ts": datetime.now().isoformat(timespec="seconds"),
+        "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
     })
 
 # 2) Eingabefeld
@@ -540,14 +543,15 @@ user_input = st.chat_input(
 
 # 3) Wenn User etwas sendet → LLM-Antwort holen
 if user_input and not st.session_state["closed"]:
-    now = datetime.now().isoformat(timespec="seconds")
+
+    # Zeitstempel erzeugen
+    now = datetime.now(tz).strftime("%d.%m.%Y %H:%M")
 
     # Nutzer-Nachricht speichern
     st.session_state["history"].append({
         "role": "user",
         "text": user_input.strip(),
-        tz = pytz.timezone("Europe/Berlin")
-        now = datetime.now(tz).strftime("%d.%m.%Y %H:%M")
+        "ts": now,
     })
 
     # LLM-Verlauf vorbereiten (role/content)
@@ -559,12 +563,11 @@ if user_input and not st.session_state["closed"]:
     # KI-Antwort generieren
     bot_text = generate_reply(llm_history, st.session_state.params)
 
-    # Bot-Antwort speichern
+    # Bot-Nachricht speichern
     st.session_state["history"].append({
         "role": "assistant",
         "text": bot_text,
-        tz = pytz.timezone("Europe/Berlin")
-        now = datetime.now(tz).strftime("%d.%m.%Y %H:%M")
+        "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
     })
 
     # Bot-Gegenangebot extrahieren
