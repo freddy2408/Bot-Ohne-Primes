@@ -500,30 +500,36 @@ def load_results_df() -> pd.DataFrame:
 def extract_price_from_bot(msg: str) -> int | None:
     text = msg.lower()
 
-    # 1) Alle echten Preis-Angaben finden
-    price_matches = re.findall(r"(?:€\s*|preis\s*:?|für\s*)(\d{2,5})", text)
-    if price_matches:
-        value = int(price_matches[-1])
-        if 300 <= value <= 2000:
-            return value
-
-    # 2) Falls der Bot „XYZ €“ schreibt (klassischer Stil)
+    # 1) Explizite Euro-Angaben "920 €" oder "920€"
     euro_matches = re.findall(r"(\d{2,5})\s*€", text)
     if euro_matches:
         value = int(euro_matches[-1])
-        if 300 <= value <= 2000:
+        if 600 <= value <= 2000:
             return value
 
-    # 3) Sicherheitsnetz: realistische iPad-Preise erkennen
-    nums = [int(n) for n in re.findall(r"\d{2,5}", text)]
+    # 2) Preis-Angaben mit Worten ("für 900", "preis wäre 880")
+    word_matches = re.findall(
+        r"(?:preis|für|gegenangebot|angebot)\s*:?[^0-9]*(\d{2,5})",
+        text
+    )
+    if word_matches:
+        value = int(word_matches[-1])
+        if 600 <= value <= 2000:
+            return value
 
-    for n in nums:
-        # typischer iPad-Preisbereich, aber KEINE Speichergrößen
-        if 500 <= n <= 2000:
+    # 3) NUR echte Preise erlauben – KEINE Speichergrößen
+    all_nums = [int(x) for x in re.findall(r"\d{2,5}", text)]
+
+    for n in all_nums:
+        # Speichergrößen / technische Werte ausschließen
+        if n in (32, 64, 128, 256, 512, 1024, 2048):
+            continue
+        # Preisbereich
+        if 600 <= n <= 2000:
             return n
 
-    # 4) KEIN Preis gefunden → None
     return None
+
 
 
 
