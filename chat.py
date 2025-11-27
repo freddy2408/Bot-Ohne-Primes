@@ -51,19 +51,58 @@ st.caption("Rolle: Verkäufer:in · Ton: freundlich & auf Augenhöhe · keine Ma
 
 CHAT_CSS = """
 <style>
-section.main > div {padding-top: 1rem;}
-.chat-bubble {padding:.7rem .9rem;border-radius:16px;margin:.25rem 0;line-height:1.4;display:inline-block;max-width:85%;box-shadow:0 1px 2px rgba(0,0,0,.06);}
-.msg-user {background:#1C64F2;color:white;border-bottom-right-radius:4px;}
-.msg-bot  {background:#F2F4F7;color:#0B1220;border-bottom-left-radius:4px;}
-.msg-meta {font-size:.72rem;color:#667085;margin-top:.15rem;}
-.row {display:flex;align-items:flex-end;margin:.25rem 0;}
-.row.right {justify-content:flex-end;}
-.row.left  {justify-content:flex-start;}
-hr.soft {border:none;border-top:1px solid #EEE;margin:.75rem 0;}
-div.block-container {padding-top:1.2rem;}
-.stButton > button {border-radius:999px;padding:.6rem 1rem;font-weight:600;}
+.chat-container {
+    padding-top: 10px;
+}
+
+.row {
+    display: flex;
+    align-items: flex-start;
+    margin: 8px 0;
+}
+
+.row.left  { justify-content: flex-start; }
+.row.right { justify-content: flex-end; }
+
+.chat-bubble {
+    padding: 10px 14px;
+    border-radius: 16px;
+    line-height: 1.45;
+    max-width: 75%;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+    font-size: 15px;
+}
+
+.msg-user {
+    background: #F1F1F1;       /* User = hellgrau */
+    color: #222;
+    border-top-right-radius: 4px;
+}
+
+.msg-bot {
+    background: #23A455;       /* Kleinanzeigen-Grün */
+    color: white;
+    border-top-left-radius: 4px;
+}
+
+.avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.15);
+}
+
+.meta {
+    font-size: .75rem;
+    color: #7A7A7A;
+    margin-top: 2px;
+}
+
 </style>
 """
+
 st.markdown(CHAT_CSS, unsafe_allow_html=True)
 
 # -----------------------------
@@ -528,12 +567,21 @@ if user_input and not st.session_state["closed"]:
 for item in st.session_state["history"]:
     side = "right" if item["role"] == "user" else "left"
     klass = "msg-user" if item["role"] == "user" else "msg-bot"
+    
+    avatar = "user.png" if item["role"] == "user" else "bot.png"
+
     st.markdown(f"""
     <div class="row {side}">
-        <div class="chat-bubble {klass}">{item['text']}</div>
+        {'<img src="user.png" class="avatar">' if side=='right' else f'<img src="{avatar}" class="avatar">'}
+        <div class="chat-bubble {klass}">
+            {item['text']}
+        </div>
     </div>
-    <div class="row {side}"><div class="msg-meta">{item['ts']}</div></div>
+    <div class="row {side}">
+        <div class="meta">{item['ts']}</div>
+    </div>
     """, unsafe_allow_html=True)
+
 
 st.markdown("<hr class='soft'/>", unsafe_allow_html=True)
 
