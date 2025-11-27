@@ -498,10 +498,33 @@ def load_results_df() -> pd.DataFrame:
     return df
 
 def extract_price_from_bot(msg: str) -> int | None:
-    nums = re.findall(r"\d{2,5}", msg)
-    if not nums:
-        return None
-    return int(nums[-1])
+    text = msg.lower()
+
+    # 1) Alle echten Preis-Angaben finden
+    price_matches = re.findall(r"(?:€\s*|preis\s*:?|für\s*)(\d{2,5})", text)
+    if price_matches:
+        value = int(price_matches[-1])
+        if 300 <= value <= 2000:
+            return value
+
+    # 2) Falls der Bot „XYZ €“ schreibt (klassischer Stil)
+    euro_matches = re.findall(r"(\d{2,5})\s*€", text)
+    if euro_matches:
+        value = int(euro_matches[-1])
+        if 300 <= value <= 2000:
+            return value
+
+    # 3) Sicherheitsnetz: realistische iPad-Preise erkennen
+    nums = [int(n) for n in re.findall(r"\d{2,5}", text)]
+
+    for n in nums:
+        # typischer iPad-Preisbereich, aber KEINE Speichergrößen
+        if 500 <= n <= 2000:
+            return n
+
+    # 4) KEIN Preis gefunden → None
+    return None
+
 
 
 # -----------------------------
