@@ -9,6 +9,15 @@ import streamlit as st
 import pandas as pd
 import time
 import sqlite3
+import base64
+
+#---
+
+def img_to_base64(path):
+    with open(path, "rb") as f:
+        data = f.read()
+        return base64.b64encode(data).decode()
+
 
 # --------------------------------
 # Session State initialisieren
