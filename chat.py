@@ -698,14 +698,40 @@ if pwd_ok:
                 use_container_width=True,
             )
 
-# RESET DER GESAMTEN DATENBANK (ALLE ERGEBNISSE LÖSCHEN)
-if st.sidebar.button("🗑️ Alle Ergebnisse löschen"):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("DELETE FROM results")
-    conn.commit()
-    conn.close()
-    st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
-    st.experimental_rerun()
+# ----------------------------
+# Admin Reset mit Bestätigung
+# ----------------------------
+st.sidebar.markdown("---")
+st.sidebar.subheader("Admin-Tools")
+
+# Zustand für Sicherheitsabfrage speichern
+if "confirm_delete" not in st.session_state:
+    st.session_state["confirm_delete"] = False
+
+# Erste Stufe: Benutzer klickt → Sicherheitswarnung erscheint
+if not st.session_state["confirm_delete"]:
+    if st.sidebar.button("🗑️ Alle Ergebnisse löschen"):
+        st.session_state["confirm_delete"] = True
+        st.sidebar.warning("⚠️ Bist du sicher, dass du **ALLE Ergebnisse** löschen möchtest?")
+        st.sidebar.info("Dieser Vorgang kann nicht rückgängig gemacht werden.")
+else:
+    # Zweite Stufe: Zwei Buttons erscheinen
+    col1, col2 = st.sidebar.columns(2)
+
+    with col1:
+        if st.button("❌ Abbrechen"):
+            st.session_state["confirm_delete"] = False
+
+    with col2:
+        if st.button("✅ Ja, löschen"):
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("DELETE FROM results")
+            conn.commit()
+            conn.close()
+
+            st.session_state["confirm_delete"] = False
+            st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
+            st.experimental_rerun()
 
 
