@@ -286,9 +286,9 @@ def generate_reply(history, params: dict) -> str:
     msg_count = sum(1 for m in history if m["role"] == "assistant")
 
 
-# ----------------------------------------
-# WEICHE MINDESTPREISREGEL
-# ----------------------------------------
+    # ----------------------------------------
+    # WEICHE MINDESTPREISREGEL
+    # ----------------------------------------
     if user_price is not None and user_price < params["min_price"]:
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
