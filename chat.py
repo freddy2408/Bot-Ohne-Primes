@@ -500,35 +500,40 @@ def load_results_df() -> pd.DataFrame:
 def extract_price_from_bot(msg: str) -> int | None:
     text = msg.lower()
 
-    # 1) Explizite Euro-Angaben "920 €" oder "920€"
-    euro_matches = re.findall(r"(\d{2,5})\s*€", text)
-    if euro_matches:
-        value = int(euro_matches[-1])
-        if 600 <= value <= 2000:
-            return value
+    # 0) Wenn eine Zahl direkt vor "gb" steht → nie ein Preis
+    gb_numbers = re.findall(r"(\d{2,5})\s*gb", text)
+    gb_numbers = {int(x) for x in gb_numbers}
 
-    # 2) Preis-Angaben mit Worten ("für 900", "preis wäre 880")
+    # 1) Explizite Euro-Angaben ("920 €" oder "920€")
+    euro_matches = re.findall(r"(\d{2,5})\s*€", text)
+    for m in euro_matches[::-1]:
+        val = int(m)
+        if val not in gb_numbers and 600 <= val <= 2000:
+            return val
+
+    # 2) Preisangaben mit Worten (für 900 / Preis wäre 880 / Gegenangebot 910)
     word_matches = re.findall(
         r"(?:preis|für|gegenangebot|angebot)\s*:?[^0-9]*(\d{2,5})",
         text
     )
-    if word_matches:
-        value = int(word_matches[-1])
-        if 600 <= value <= 2000:
-            return value
+    for m in word_matches[::-1]:
+        val = int(m)
+        if val not in gb_numbers and 600 <= val <= 2000:
+            return val
 
-    # 3) NUR echte Preise erlauben – KEINE Speichergrößen
+    # 3) Alle sonstigen Zahlen prüfen (Backup), aber GB ausschließen!
     all_nums = [int(x) for x in re.findall(r"\d{2,5}", text)]
 
     for n in all_nums:
-        # Speichergrößen / technische Werte ausschließen
+        if n in gb_numbers:
+            continue
         if n in (32, 64, 128, 256, 512, 1024, 2048):
             continue
-        # Preisbereich
         if 600 <= n <= 2000:
             return n
 
     return None
+
 
 
 
