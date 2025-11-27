@@ -84,13 +84,13 @@ CHAT_CSS = """
 
 .msg-user {
     background: #23A455;       /* User = Kleinanzeigen-Grün */
-    color: #222;
+    color: white;
     border-top-right-radius: 4px;
 }
 
 .msg-bot {
     background: #F1F1F1;       /* Bot = hellgrau */
-    color: white;
+    color: #222;
     border-top-left-radius: 4px;
 }
 
