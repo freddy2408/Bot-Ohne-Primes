@@ -56,8 +56,8 @@ h1,h2,h3 { margin-bottom: .4rem; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("iPad-Verhandlung – Kontrollbedingung (ohne Machtprimes)")
-st.caption("Rolle: Verkäufer:in · Ton: freundlich & auf Augenhöhe · keine Macht-/Knappheits-/Autoritäts-Frames")
+st.title("iPad-Verhandlung – ohne Machtprimes")
+st.caption("Deine Rolle: Käufer")
 
 CHAT_CSS = """
 <style>
@@ -119,7 +119,7 @@ st.markdown(CHAT_CSS, unsafe_allow_html=True)
 # [EXPERIMENTSPARAMETER – defaults]
 # -----------------------------
 DEFAULT_PARAMS = {
-    "scenario_text": "Sie verhandeln über ein neues iPad (neu, 256 GB, Space Grey) inklusive Apple Pencil (2. Gen) mit M5-Chip.",
+    "scenario_text": "Sie verhandeln über ein iPad Pro (neu, 13 Zoll, M5 Chip, 256 GB, Space Grey) inklusive Apple Pencil (2. Gen).",
     "list_price": 1000,          # Ausgangspreis
     "min_price": 800,            # Untergrenze
     "tone": "freundlich, respektvoll, auf Augenhöhe, sachlich",
