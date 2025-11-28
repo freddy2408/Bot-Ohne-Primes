@@ -56,6 +56,7 @@ ipad_b64 = img_to_base64("ipad.png")
 st.markdown(f"""
 <style>
 
+#-------Hintergrung Farbe ausgeblendet------
 #   .stApp {{
 #      max-width: 900px;
 #        margin: 0 auto;
@@ -693,10 +694,6 @@ with deal_col2:
     ) if not st.session_state.get("closed", False) else False
 
 
-# 6) Abbrechen-Handler (weiter verhandeln erlaubt)
-if cancel and not st.session_state.get("closed", False):
-    st.session_state["agreed_price"] = None
-    st.info("Deal abgebrochen. Du kannst weiter verhandeln.")
 
 # 7) Deal-Bestätigung → Ergebnis speichern
 if confirm and not st.session_state["closed"]:
