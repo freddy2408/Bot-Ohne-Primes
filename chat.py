@@ -55,6 +55,10 @@ ipad_b64 = img_to_base64("ipad.png")
 
 st.markdown(f"""
 <style>
+.stApp {
+    background: linear-gradient(to bottom, #f8f8f8, #e9e9e9);
+}
+
 .header-flex {{
     display: flex;
     align-items: center;
