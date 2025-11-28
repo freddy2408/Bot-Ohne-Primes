@@ -210,7 +210,7 @@ PREISLOGIK:
 
 - Nutzer 600–700 €
   → höflich ablehnen (immer noch zu wenig).
-  → Gegenangebot HOCH ansetzen (900–980 €).
+  → Gegenangebot HOCH ansetzen (940–990 €).
   → Du verhältst dich verkaufsorientiert.
 
 - Nutzer 700–800 €
@@ -432,7 +432,7 @@ def generate_reply(history, params: dict) -> str:
 
     # B) 600–700 – HOHES Gegenangebot
     if 600 <= user_price < 700:
-        raw_price = random.randint(900, 960)
+        raw_price = random.randint(920, 990)
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
 
@@ -450,9 +450,9 @@ def generate_reply(history, params: dict) -> str:
 
         # Frühphase: hohe Preise, Endphase: realistisch
         if msg_count < 3:
-            raw_price = random.randint(900, 940)
+            raw_price = random.randint(910, 960)
         else:
-            raw_price = random.randint(850, 910)
+            raw_price = random.randint(850, 930)
 
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
@@ -469,7 +469,7 @@ def generate_reply(history, params: dict) -> str:
     if user_price >= 800:
         # je nach Gesprächsphase konservativ starten
         if msg_count < 3:
-            raw_price = user_price + random.randint(30, 60)
+            raw_price = user_price + random.randint(30, 80)
         else:
             raw_price = user_price + random.randint(15, 40)
 
