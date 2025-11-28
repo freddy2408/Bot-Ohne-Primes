@@ -45,19 +45,45 @@ ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
 # -----------------------------
 # [UI: Layout & Styles]
 # -----------------------------
+# -----------------------------
+# [UI: Layout & Styles + Titel mit Bild]
+# -----------------------------
 st.set_page_config(page_title="iPad-Verhandlung – Kontrollbedingung", page_icon="💬")
-st.markdown("""
+
+# Bild laden (z. B. ipad.png im Projektordner)
+ipad_b64 = img_to_base64("ipad.png")
+
+st.markdown(f"""
 <style>
-.stApp { max-width: 900px; margin: 0 auto; }
-h1,h2,h3 { margin-bottom: .4rem; }
-.small { color:#6b7280; font-size:.9rem; }
-.pill { display:inline-block; background:#ecfeff; border:1px solid #cffafe; color:#0e7490;
-        padding:2px 8px; border-radius:999px; font-size:.8rem; }
+.header-flex {{
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 0.5rem;
+}}
+.header-img {{
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    object-fit: cover;
+    box-shadow: 0 2px 4px rgba(0,0,0,.15);
+}}
+.header-title {{
+    font-size: 2rem;
+    font-weight: 600;
+    margin: 0;
+    padding: 0;
+}}
 </style>
+
+<div class="header-flex">
+    <img src="data:image/png;base64,{ipad_b64}" class="header-img">
+    <div class="header-title">iPad-Verhandlung – ohne Machtprimes</div>
+</div>
 """, unsafe_allow_html=True)
 
-st.title("iPad-Verhandlung – ohne Machtprimes")
 st.caption("Deine Rolle: Käufer")
+
 
 CHAT_CSS = """
 <style>
