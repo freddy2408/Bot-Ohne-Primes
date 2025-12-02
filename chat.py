@@ -708,7 +708,6 @@ if confirm and not st.session_state["closed"]:
 
     log_result(st.session_state["session_id"], True, bot_price, msg_count)
 
-    # Chat schließen & Fragebogen starten
     st.session_state["closed"] = True
     st.session_state["show_survey"] = True
 
@@ -716,7 +715,7 @@ if confirm and not st.session_state["closed"]:
 
 
 # 8) Verhandlung ohne Einigung beenden
-if cancel and not st.session_state["closed"]:
+elif cancel and not st.session_state["closed"]:   # <-- WICHTIG: elif statt if
 
     msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
 
@@ -726,6 +725,7 @@ if cancel and not st.session_state["closed"]:
     st.session_state["show_survey"] = True
 
     st.experimental_rerun()
+
 
 
 # -----------------------------
