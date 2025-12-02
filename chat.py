@@ -38,6 +38,9 @@ if "closed" not in st.session_state:
 if "show_survey" not in st.session_state:
     st.session_state["show_survey"] = False
 
+if "action" not in st.session_state:
+    st.session_state["action"] = None
+
 
 # -----------------------------
 # [SECRETS & MODELL]
@@ -706,21 +709,20 @@ if not st.session_state["show_survey"]:
     show_deal = (bot_offer is not None) and not st.session_state.get("closed", False)
 
     with deal_col1:
-        confirm = st.button(
-            f"💚 Deal bestätigen: {bot_offer} €" if show_deal else "Deal bestätigen",
-            use_container_width=True,
-            disabled=not show_deal
-        )
+    if st.button(f"💚 Deal bestätigen: {bot_offer} €" if show_deal else "Deal bestätigen",
+                 disabled=not show_deal,
+                 use_container_width=True):
+        st.session_state["action"] = "confirm"
 
-    with deal_col2:
-        cancel = st.button(
-            "❌ Verhandlung beenden",
-            use_container_width=True,
-        ) if not st.session_state.get("closed", False) else False
+with deal_col2:
+    if st.button("❌ Verhandlung beenden", use_container_width=True):
+        st.session_state["action"] = "cancel"
 
 
-# 7) Deal-Bestätigung → Ergebnis speichern
-if confirm and not st.session_state["closed"]:
+# ------------------------------
+# 7) Aktionen verarbeiten (Deal / Cancel)
+# ------------------------------
+if st.session_state["action"] == "confirm" and not st.session_state["closed"]:
 
     bot_price = st.session_state.get("bot_offer")
     msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
@@ -729,12 +731,11 @@ if confirm and not st.session_state["closed"]:
 
     st.session_state["closed"] = True
     st.session_state["show_survey"] = True
+    st.session_state["action"] = None
 
     st.experimental_rerun()
 
-
-# 8) Verhandlung ohne Einigung beenden
-elif cancel and not st.session_state["closed"]:   # <-- WICHTIG: elif statt if
+elif st.session_state["action"] == "cancel" and not st.session_state["closed"]:
 
     msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
 
@@ -742,9 +743,9 @@ elif cancel and not st.session_state["closed"]:   # <-- WICHTIG: elif statt if
 
     st.session_state["closed"] = True
     st.session_state["show_survey"] = True
+    st.session_state["action"] = None
 
     st.experimental_rerun()
-
 
 
 # -----------------------------
