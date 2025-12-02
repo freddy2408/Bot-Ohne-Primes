@@ -705,7 +705,7 @@ for item in st.session_state["history"]:
 
 
 # 5) Deal bestätigen / Verhandlung beenden
-if not st.session_state["show_survey"]:
+if not st.session_state["closed"]:
 
     deal_col1, deal_col2 = st.columns([1, 1])
 
@@ -723,10 +723,11 @@ if not st.session_state["show_survey"]:
             msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user","assistant")])
             log_result(st.session_state["session_id"], True, bot_price, msg_count)
 
-            # Direkt Survey-Modus aktivieren
+           # Deal speichern
             st.session_state["closed"] = True
             st.session_state["show_survey"] = True
-            st.stop()
+            st.experimental_rerun()
+
 
     with deal_col2:
         if st.button("❌ Verhandlung beenden", use_container_width=True):
@@ -736,7 +737,7 @@ if not st.session_state["show_survey"]:
 
             st.session_state["closed"] = True
             st.session_state["show_survey"] = True
-            st.stop()
+            st.experimental_rerun()
 
 
 # -----------------------------
