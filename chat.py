@@ -42,6 +42,16 @@ if "action" not in st.session_state:
     st.session_state["action"] = None
 
 
+# --- SAFER RERUN HANDLING ---
+if "pending_rerun" not in st.session_state:
+    st.session_state["pending_rerun"] = False
+
+# Falls ein Rerun ansteht → hier sauber ausführen
+if st.session_state["pending_rerun"]:
+    st.session_state["pending_rerun"] = False
+    st.experimental_rerun()
+
+
 # -----------------------------
 # [SECRETS & MODELL]
 # -----------------------------
@@ -701,7 +711,6 @@ for item in st.session_state["history"]:
 
 
 # 5) Deal bestätigen / Verhandlung beenden
-# 5) Deal bestätigen / Verhandlung beenden
 if not st.session_state["show_survey"]:
 
     deal_col1, deal_col2 = st.columns([1, 1])
@@ -728,6 +737,7 @@ if not st.session_state["show_survey"]:
 # ------------------------------
 # 7) Aktionen verarbeiten (Deal / Cancel)
 # ------------------------------
+#Deal
 if st.session_state["action"] == "confirm" and not st.session_state["closed"]:
 
     bot_price = st.session_state.get("bot_offer")
@@ -738,9 +748,11 @@ if st.session_state["action"] == "confirm" and not st.session_state["closed"]:
     st.session_state["closed"] = True
     st.session_state["show_survey"] = True
     st.session_state["action"] = None
+    st.session_state["pending_rerun"] = True
+    st.stop()
 
-    st.experimental_rerun()
 
+#Cancel
 elif st.session_state["action"] == "cancel" and not st.session_state["closed"]:
 
     msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
@@ -750,8 +762,9 @@ elif st.session_state["action"] == "cancel" and not st.session_state["closed"]:
     st.session_state["closed"] = True
     st.session_state["show_survey"] = True
     st.session_state["action"] = None
+    st.session_state["pending_rerun"] = True
+    st.stop()
 
-    st.experimental_rerun()
 
 
 # -----------------------------
