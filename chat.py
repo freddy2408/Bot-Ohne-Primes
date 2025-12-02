@@ -42,16 +42,6 @@ if "action" not in st.session_state:
     st.session_state["action"] = None
 
 
-# --- SAFER RERUN HANDLING ---
-if "pending_rerun" not in st.session_state:
-    st.session_state["pending_rerun"] = False
-
-# Falls ein Rerun ansteht → hier sauber ausführen
-if st.session_state["pending_rerun"]:
-    st.session_state["pending_rerun"] = False
-    st.experimental_rerun()
-
-
 # -----------------------------
 # [SECRETS & MODELL]
 # -----------------------------
@@ -595,49 +585,6 @@ with st.container():
     st.write(f"**Ausgangspreis:** {st.session_state.params['list_price']} €")
 
 st.caption(f"Session-ID: `{st.session_state.sid}`")
-
-
-# Wenn der Fragebogen aktiv ist → sofort nur Fragebogen anzeigen
-if st.session_state["show_survey"]:
-    from survey import show_survey
-    survey_data = show_survey()
-    if survey_data:
-        # hier speichern
-        import pandas as pd, os
-        SURVEY_FILE = "survey_results.xlsx"
-        if os.path.exists(SURVEY_FILE):
-            df_old = pd.read_excel(SURVEY_FILE)
-            df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
-        else:
-            df = pd.DataFrame([survey_data])
-        df.to_excel(SURVEY_FILE, index=False)
-        st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
-    st.stop()  # <-- verhindert dass der Chat ab jetzt überhaupt weiterläuft
-
-
-# ================================
-# Falls Survey aktiv → sofort Fragebogen zeigen und Chat überspringen
-# ================================
-if st.session_state.get("show_survey", False):
-    from survey import show_survey
-
-    survey_data = show_survey()
-
-    # Wenn der Fragebogen abgeschickt wurde → Speichern
-    if survey_data:
-        import pandas as pd, os
-
-        SURVEY_FILE = "survey_results.xlsx"
-        if os.path.exists(SURVEY_FILE):
-            df_old = pd.read_excel(SURVEY_FILE)
-            df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
-        else:
-            df = pd.DataFrame([survey_data])
-
-        df.to_excel(SURVEY_FILE, index=False)
-        st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
-
-    st.stop()  # 💥 WICHTIG: verhindert dass der Chat geladen wird
 
 
 # -----------------------------
