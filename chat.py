@@ -738,103 +738,105 @@ if not st.session_state["closed"]:
 # -----------------------------
 # [ADMIN-BEREICH: Ergebnisse (privat)]
 # -----------------------------
-st.sidebar.header("📊 Ergebnisse")
-pwd_ok = False
-dashboard_password = st.secrets.get("DASHBOARD_PASSWORD", os.environ.get("DASHBOARD_PASSWORD"))
-pwd_input = st.sidebar.text_input("Passwort für Dashboard", type="password")
-if dashboard_password:
-    if pwd_input and pwd_input == dashboard_password:
-        pwd_ok = True
-    elif pwd_input and pwd_input != dashboard_password:
-        st.sidebar.warning("Falsches Passwort.")
-else:
-    st.sidebar.info("Kein Passwort gesetzt (DASHBOARD_PASSWORD). Dashboard ist deaktiviert.")
-
-if pwd_ok:
-    st.sidebar.success("Zugang gewährt.")
-
-    with st.sidebar.expander("Alle Verhandlungsergebnisse", expanded=True):
-        if os.path.exists("survey_results.xlsx"):
-            df_s = pd.read_excel("survey_results.xlsx")
-            st.dataframe(df_s, use_container_width=True)
-
-            from io import BytesIO
-            buf = BytesIO()
-            df_s.to_excel(buf, index=False)
-            buf.seek(0)
-
-            st.download_button(
-                "Umfrage als Excel herunterladen",
-                buf,
-                file_name="survey_results_download.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        else:
-            st.info("Noch keine Umfrage-Daten vorhanden.")
-
-
-        df = load_results_df()
-
-        if len(df) == 0:
-            st.write("Noch keine Ergebnisse gespeichert.")
-
-        else:
-            # neue Nummerierung hinzufügen (1, 2, 3, ...)
-            df = df.reset_index(drop=True)
-            df["nr"] = df.index + 1
-
-            # schönere Reihenfolge
-            df = df[["nr", "ts", "session_id", "deal", "price", "msg_count"]]
-
-            st.dataframe(df, use_container_width=True, hide_index=True)
-
-            from io import BytesIO
-            buffer = BytesIO()
-            df.to_excel(buffer, index=False)
-            buffer.seek(0)
-
-            st.download_button(
-                "Excel herunterladen",
-                buffer,
-                file_name="verhandlungsergebnisse.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
-
-# ----------------------------
-# Admin Reset mit Bestätigung
-# ----------------------------
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Admin-Tools")
-
-    # Zustand für Sicherheitsabfrage speichern
-    if "confirm_delete" not in st.session_state:
-        st.session_state["confirm_delete"] = False
-
-    # Erste Stufe: Benutzer klickt → Sicherheitswarnung erscheint
-    if not st.session_state["confirm_delete"]:
-        if st.sidebar.button("🗑️ Alle Ergebnisse löschen"):
-            st.session_state["confirm_delete"] = True
-            st.sidebar.warning("⚠️ Bist du sicher, dass du **ALLE Ergebnisse** löschen möchtest?")
-            st.sidebar.info("Dieser Vorgang kann nicht rückgängig gemacht werden.")
+if not st.session_state["closed"]:
+    st.sidebar.header("📊 Ergebnisse")
+    pwd_ok = False
+    dashboard_password = st.secrets.get("DASHBOARD_PASSWORD", os.environ.get("DASHBOARD_PASSWORD"))
+    pwd_input = st.sidebar.text_input("Passwort für Dashboard", type="password")
+    if dashboard_password:
+        if pwd_input and pwd_input == dashboard_password:
+            pwd_ok = True
+        elif pwd_input and pwd_input != dashboard_password:
+            st.sidebar.warning("Falsches Passwort.")
     else:
-        # Zweite Stufe: Zwei Buttons erscheinen
-        col1, col2 = st.sidebar.columns(2)
+        st.sidebar.info("Kein Passwort gesetzt (DASHBOARD_PASSWORD). Dashboard ist deaktiviert.")
 
-        with col1:
-            if st.button("❌ Abbrechen"):
-                st.session_state["confirm_delete"] = False
+    if pwd_ok:
+        st.sidebar.success("Zugang gewährt.")
 
-        with col2:
-            if st.button("✅ Ja, löschen"):
-                conn = sqlite3.connect(DB_PATH)
-                c = conn.cursor()
-                c.execute("DELETE FROM results")
-                conn.commit()
-                conn.close()
+        with st.sidebar.expander("Alle Verhandlungsergebnisse", expanded=True):
+            if os.path.exists("survey_results.xlsx"):
+                df_s = pd.read_excel("survey_results.xlsx")
+                st.dataframe(df_s, use_container_width=True)
 
-                st.session_state["confirm_delete"] = False
-                st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
-                st.experimental_rerun()
+                from io import BytesIO
+                buf = BytesIO()
+                df_s.to_excel(buf, index=False)
+                buf.seek(0)
 
-    
+                st.download_button(
+                    "Umfrage als Excel herunterladen",
+                    buf,
+                    file_name="survey_results_download.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.info("Noch keine Umfrage-Daten vorhanden.")
+
+
+            df = load_results_df()
+
+            if len(df) == 0:
+                st.write("Noch keine Ergebnisse gespeichert.")
+
+            else:
+                # neue Nummerierung hinzufügen (1, 2, 3, ...)
+                df = df.reset_index(drop=True)
+                df["nr"] = df.index + 1
+
+                # schönere Reihenfolge
+                df = df[["nr", "ts", "session_id", "deal", "price", "msg_count"]]
+
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+                from io import BytesIO
+                buffer = BytesIO()
+                df.to_excel(buffer, index=False)
+                buffer.seek(0)
+
+                st.download_button(
+                    "Excel herunterladen",
+                    buffer,
+                    file_name="verhandlungsergebnisse.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                )
+
+    # ----------------------------
+    # Admin Reset mit Bestätigung
+    # ----------------------------
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Admin-Tools")
+
+        # Zustand für Sicherheitsabfrage speichern
+        if "confirm_delete" not in st.session_state:
+            st.session_state["confirm_delete"] = False
+
+        # Erste Stufe: Benutzer klickt → Sicherheitswarnung erscheint
+        if not st.session_state["confirm_delete"]:
+            if st.sidebar.button("🗑️ Alle Ergebnisse löschen"):
+                st.session_state["confirm_delete"] = True
+                st.sidebar.warning("⚠️ Bist du sicher, dass du **ALLE Ergebnisse** löschen möchtest?")
+                st.sidebar.info("Dieser Vorgang kann nicht rückgängig gemacht werden.")
+        else:
+            # Zweite Stufe: Zwei Buttons erscheinen
+            col1, col2 = st.sidebar.columns(2)
+
+            with col1:
+                if st.button("❌ Abbrechen"):
+                    st.session_state["confirm_delete"] = False
+
+            with col2:
+                if st.button("✅ Ja, löschen"):
+                    conn = sqlite3.connect(DB_PATH)
+                    c = conn.cursor()
+                    c.execute("DELETE FROM results")
+                    conn.commit()
+                    conn.close()
+
+                    st.session_state["confirm_delete"] = False
+                    st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
+                    st.experimental_rerun()
+
+        
+
