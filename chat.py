@@ -833,16 +833,29 @@ if pwd_ok:
 
 
 # ----------------------------
-# Fragebogen
+# Fragebogen (nur nach Abschluss)
 # ----------------------------
-
 from survey import show_survey
 
-# Nach erfolgreichem Abschluss oder Abbruch:
-survey_data = show_survey()
+survey_data = None
 
 if st.session_state["show_survey"]:
     survey_data = show_survey()
-else:
-    survey_data = None
 
+# Wenn der Fragebogen abgeschickt wurde → speichern
+if survey_data:
+    import pandas as pd
+    import os
+
+    SURVEY_FILE = "survey_results.xlsx"
+
+    # Datei laden oder neu erstellen
+    if os.path.exists(SURVEY_FILE):
+        df_old = pd.read_excel(SURVEY_FILE)
+        df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
+    else:
+        df = pd.DataFrame([survey_data])
+
+    df.to_excel(SURVEY_FILE, index=False)
+
+    st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
