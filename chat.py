@@ -586,6 +586,25 @@ with st.container():
 
 st.caption(f"Session-ID: `{st.session_state.sid}`")
 
+
+# Wenn der Fragebogen aktiv ist → sofort nur Fragebogen anzeigen
+if st.session_state["show_survey"]:
+    from survey import show_survey
+    survey_data = show_survey()
+    if survey_data:
+        # hier speichern
+        import pandas as pd, os
+        SURVEY_FILE = "survey_results.xlsx"
+        if os.path.exists(SURVEY_FILE):
+            df_old = pd.read_excel(SURVEY_FILE)
+            df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
+        else:
+            df = pd.DataFrame([survey_data])
+        df.to_excel(SURVEY_FILE, index=False)
+        st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
+    st.stop()  # <-- verhindert dass der Chat ab jetzt überhaupt weiterläuft
+
+
 # -----------------------------
 # [CHAT-UI – vollständig LLM-basiert]
 # -----------------------------
