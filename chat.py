@@ -701,6 +701,7 @@ for item in st.session_state["history"]:
 
 
 # 5) Deal bestätigen / Verhandlung beenden
+# 5) Deal bestätigen / Verhandlung beenden
 if not st.session_state["show_survey"]:
 
     deal_col1, deal_col2 = st.columns([1, 1])
@@ -709,14 +710,19 @@ if not st.session_state["show_survey"]:
     show_deal = (bot_offer is not None) and not st.session_state.get("closed", False)
 
     with deal_col1:
-    if st.button(f"💚 Deal bestätigen: {bot_offer} €" if show_deal else "Deal bestätigen",
-                 disabled=not show_deal,
-                 use_container_width=True):
-        st.session_state["action"] = "confirm"
+        if st.button(
+            f"💚 Deal bestätigen: {bot_offer} €" if show_deal else "Deal bestätigen",
+            disabled=not show_deal,
+            use_container_width=True
+        ):
+            st.session_state["action"] = "confirm"
 
-with deal_col2:
-    if st.button("❌ Verhandlung beenden", use_container_width=True):
-        st.session_state["action"] = "cancel"
+    with deal_col2:
+        if st.button(
+            "❌ Verhandlung beenden",
+            use_container_width=True
+        ):
+            st.session_state["action"] = "cancel"
 
 
 # ------------------------------
