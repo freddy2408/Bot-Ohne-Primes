@@ -587,6 +587,31 @@ with st.container():
 st.caption(f"Session-ID: `{st.session_state.sid}`")
 
 
+# ----------------------------
+# Fragebogen (nur nach Abschluss)
+# ----------------------------
+from survey import show_survey
+
+if st.session_state["show_survey"]:
+    survey_data = show_survey()
+
+    if survey_data:
+        import pandas as pd, os
+        SURVEY_FILE = "survey_results.xlsx"
+
+        if os.path.exists(SURVEY_FILE):
+            df_old = pd.read_excel(SURVEY_FILE)
+            df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
+        else:
+            df = pd.DataFrame([survey_data])
+
+        df.to_excel(SURVEY_FILE, index=False)
+
+        st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
+
+    st.stop()  # wichtig, damit nichts anderes angezeigt wird
+
+
 # -----------------------------
 # [CHAT-UI – vollständig LLM-basiert]
 # -----------------------------
@@ -815,31 +840,5 @@ if pwd_ok:
                 st.session_state["confirm_delete"] = False
                 st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
                 st.experimental_rerun()
-
-
-# ----------------------------
-# Fragebogen (nur nach Abschluss)
-# ----------------------------
-from survey import show_survey
-
-if st.session_state["show_survey"]:
-    survey_data = show_survey()
-
-    if survey_data:
-        import pandas as pd, os
-        SURVEY_FILE = "survey_results.xlsx"
-
-        if os.path.exists(SURVEY_FILE):
-            df_old = pd.read_excel(SURVEY_FILE)
-            df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
-        else:
-            df = pd.DataFrame([survey_data])
-
-        df.to_excel(SURVEY_FILE, index=False)
-
-        st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
-
-    st.stop()  # wichtig, damit nichts anderes angezeigt wird
-
 
     
