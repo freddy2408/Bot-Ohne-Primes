@@ -1,14 +1,12 @@
 # ============================================
-# survey.py – Abschlussfragebogen für Verhandlungs-Bot
+# survey.py – Abschlussfragebogen für Verhandlungs-Bot (überarbeitet)
 # ============================================
 
 import streamlit as st
 
 def show_survey():
     st.markdown("## 📋 Abschlussfragebogen zur Verhandlung")
-
     st.info("Bitte füllen Sie den Fragebogen aus. Ihre Antworten bleiben anonym.")
-
     st.markdown("---")
 
     # ---------------------------
@@ -16,13 +14,30 @@ def show_survey():
     # ---------------------------
     age = st.text_input("1. Wie alt sind Sie?")
 
+    st.markdown("---")
+
     # ---------------------------
-    # 2. Geschlecht
+    # 2. Geschlecht (Layout angepasst)
     # ---------------------------
-    gender = st.selectbox(
-        "2. Mit welchem Geschlecht identifizieren Sie sich?",
-        ["männlich", "weiblich", "divers", "keine Antwort"]
-    )
+    st.write("2. Mit welchem Geschlecht identifizieren Sie sich?")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        gender_top = st.radio(" ", ["männlich"], label_visibility="collapsed")
+    with col2:
+        gender_top2 = st.radio("  ", ["weiblich"], label_visibility="collapsed")
+
+    gender_bottom = st.radio("   ", ["divers", "keine Angabe"], label_visibility="collapsed")
+
+    # Auswahl zusammenführen
+    if gender_top == "männlich":
+        gender = "männlich"
+    elif gender_top2 == "weiblich":
+        gender = "weiblich"
+    else:
+        gender = gender_bottom
+
+    st.markdown("---")
 
     # ---------------------------
     # 3. Bildungsabschluss
@@ -46,6 +61,8 @@ def show_survey():
         ]
     )
 
+    st.markdown("---")
+
     # ---------------------------
     # 4. Fachbereich (optional)
     # ---------------------------
@@ -67,84 +84,46 @@ def show_survey():
         if field == "Andere":
             field_other = st.text_input("Bitte geben Sie an, welcher Fachbereich:")
 
+    st.markdown("---")
+
+    # ---------------------------
+    # Hilfsfunktion Skala 1–10 mit Labels links/rechts
+    # ---------------------------
+    def scale(question, left, right, key):
+        st.write(question)
+        val = st.slider("", 1, 10, 5, key=key)
+
+        col_l, col_r = st.columns(2)
+        with col_l:
+            st.caption(f"1 = {left}")
+        with col_r:
+            st.caption(f"10 = {right}")
+
+        return val
+
     # ---------------------------
     # 5. Zufriedenheit Ergebnis
     # ---------------------------
-    satisfaction_outcome = st.slider(
+    satisfaction_outcome = scale(
         "5. Wie zufrieden sind Sie mit dem Ergebnis der Verhandlung?",
-        1, 10, 5
-    )
-
-    # ---------------------------
-    # 6. Zufriedenheit Verlauf
-    # ---------------------------
-    satisfaction_process = st.slider(
-        "6. Wie zufriedenstellend fanden Sie den Verhandlungsverlauf?",
-        1, 10, 5
-    )
-
-    # ---------------------------
-    # 7. Gefühl, besseres Ergebnis möglich?
-    # ---------------------------
-    better_result = st.slider(
-        "7. Haben Sie das Gefühl, Sie hätten ein besseres Verhandlungsergebnis erzielen können (preislich)?",
-        1, 10, 5
-    )
-
-    # ---------------------------
-    # 8. Abweichung vom normalen Verhalten
-    # ---------------------------
-    deviation = st.selectbox(
-        "8. Inwiefern sind Sie während der Verhandlung von Ihrem normalen Verhandlungsverhalten abgewichen?",
-        [
-            "stark dominant",
-            "leicht dominant",
-            "keine Abweichung",
-            "leicht nachgiebig",
-            "stark nachgiebig"
-        ]
-    )
-
-    # ---------------------------
-    # 9. Verhandlungsbereitschaft im Alltag
-    # ---------------------------
-    willingness = st.slider(
-        "9. Wie hoch ist Ihre Bereitschaft zu verhandeln im Alltag?",
-        1, 10, 5,
-        help="1 = Ich sehe einen festen Preis als gegeben, 10 = Ich verhandle über jeden Preis"
-    )
-
-    # ---------------------------
-    # 10. Wiederverhandlung?
-    # ---------------------------
-    again = st.selectbox(
-        "10. Würden Sie nochmal mit dem Bot verhandeln wollen?",
-        ["Ja", "Nein"]
+        "sehr unzufrieden",
+        "sehr zufrieden",
+        "s1"
     )
 
     st.markdown("---")
 
     # ---------------------------
-    # Absenden
+    # 6. Zufriedenheit Verlauf
     # ---------------------------
-    submit = st.button("Fragebogen absenden")
+    satisfaction_process = scale(
+        "6. Wie zufriedenstellend fanden Sie den Verhandlungsverlauf?",
+        "sehr unzufrieden",
+        "sehr zufrieden",
+        "s2"
+    )
 
-    if submit:
-        st.success("Vielen Dank für Ihre Teilnahme! Die Daten wurden gespeichert.")
+    st.markdown("---")
 
-        # Rückgabe an das Hauptsystem zur Speicherung
-        return {
-            "age": age,
-            "gender": gender,
-            "education": education,
-            "field": field,
-            "field_other": field_other,
-            "satisfaction_outcome": satisfaction_outcome,
-            "satisfaction_process": satisfaction_process,
-            "better_result": better_result,
-            "deviation": deviation,
-            "willingness": willingness,
-            "again": again
-        }
-
-    return None
+    # ---------------------------
+    # 7. Gefühl, besseres Ergebnis möglich
