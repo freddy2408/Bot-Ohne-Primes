@@ -35,6 +35,10 @@ if "agreed_price" not in st.session_state:
 if "closed" not in st.session_state:
     st.session_state["closed"] = False  # Ob die Verhandlung abgeschlossen ist
 
+if "show_survey" not in st.session_state:
+    st.session_state["show_survey"] = False
+
+
 # -----------------------------
 # [SECRETS & MODELL]
 # -----------------------------
@@ -675,6 +679,8 @@ for item in st.session_state["history"]:
 
 
 # 5) Deal bestätigen / Verhandlung beenden
+
+if not st.session_state["show_survey"]:
 deal_col1, deal_col2 = st.columns([1, 1])
 
 bot_offer = st.session_state.get("bot_offer", None)
@@ -704,8 +710,10 @@ if confirm and not st.session_state["closed"]:
 
     log_result(st.session_state["session_id"], True, bot_price, msg_count)
 
-    st.success(f"Deal bestätigt: {bot_price} €. Die Verhandlung ist abgeschlossen.")
-    st.stop()
+    st.session_state["closed"] = True
+    st.session_state["show_survey"] = True
+    st.experimental_rerun()
+
 
 
 # 8) Verhandlung ohne Einigung beenden
@@ -716,8 +724,10 @@ if cancel and not st.session_state["closed"]:
 
     log_result(st.session_state["session_id"], False, None, msg_count)
 
-    st.info("Verhandlung beendet – ohne Einigung.")
-    st.stop()
+    st.session_state["closed"] = True
+    st.session_state["show_survey"] = True
+    st.experimental_rerun()
+
 
 
 # -----------------------------
@@ -739,6 +749,24 @@ if pwd_ok:
     st.sidebar.success("Zugang gewährt.")
 
     with st.sidebar.expander("Alle Verhandlungsergebnisse", expanded=True):
+        if os.path.exists("survey_results.xlsx"):
+            df_s = pd.read_excel("survey_results.xlsx")
+            st.dataframe(df_s, use_container_width=True)
+
+            from io import BytesIO
+            buf = BytesIO()
+            df_s.to_excel(buf, index=False)
+            buf.seek(0)
+
+            st.download_button(
+                "Umfrage als Excel herunterladen",
+                buf,
+                file_name="survey_results_download.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.info("Noch keine Umfrage-Daten vorhanden.")
+
 
         df = load_results_df()
 
@@ -814,7 +842,8 @@ from survey import show_survey
 # Nach erfolgreichem Abschluss oder Abbruch:
 survey_data = show_survey()
 
-if survey_data:
-    # hier speichern, z. B. in SQLite
-    print("Neue Umfrage:", survey_data)
+if st.session_state["show_survey"]:
+    survey_data = show_survey()
+else:
+    survey_data = None
 
