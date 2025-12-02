@@ -702,22 +702,21 @@ if not st.session_state["show_survey"]:
 
 # 7) Deal-Bestätigung → Ergebnis speichern
 if confirm and not st.session_state["closed"]:
-    st.session_state["closed"] = True
 
     bot_price = st.session_state.get("bot_offer")
     msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
 
     log_result(st.session_state["session_id"], True, bot_price, msg_count)
 
+    # Chat schließen & Fragebogen starten
     st.session_state["closed"] = True
     st.session_state["show_survey"] = True
-    st.experimental_rerun()
 
+    st.experimental_rerun()
 
 
 # 8) Verhandlung ohne Einigung beenden
 if cancel and not st.session_state["closed"]:
-    st.session_state["closed"] = True
 
     msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
 
@@ -725,8 +724,8 @@ if cancel and not st.session_state["closed"]:
 
     st.session_state["closed"] = True
     st.session_state["show_survey"] = True
-    st.experimental_rerun()
 
+    st.experimental_rerun()
 
 
 # -----------------------------
