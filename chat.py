@@ -38,38 +38,6 @@ if "closed" not in st.session_state:
 if "action" not in st.session_state:
     st.session_state["action"] = None
 
-
-# ----------------------------
-# Fragebogen (nur nach Abschluss)
-# ----------------------------
-from survey import show_survey
-
-if st.session_state["closed"]:
-
-    survey_data = show_survey()   # <-- MUSS zuerst ausgeführt werden!
-
-    if survey_data:
-        SURVEY_FILE = "survey_results.xlsx"
-
-        if os.path.exists(SURVEY_FILE):
-            df_old = pd.read_excel(SURVEY_FILE)
-            df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
-        else:
-            df = pd.DataFrame([survey_data])
-
-        df.to_excel(SURVEY_FILE, index=False)
-        st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
-
-    st.stop()
-
-
-# -----------------------------
-# [SECRETS & MODELL]
-# -----------------------------
-API_KEY = st.secrets["OPENAI_API_KEY"]
-MODEL  = st.secrets.get("OPENAI_MODEL", "gpt-4o-mini")
-ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
-
 # -----------------------------
 # [UI: Layout & Styles + Titel mit Bild]
 # -----------------------------
@@ -173,6 +141,40 @@ CHAT_CSS = """
 """
 
 st.markdown(CHAT_CSS, unsafe_allow_html=True)
+
+
+# ----------------------------
+# Fragebogen (nur nach Abschluss)
+# ----------------------------
+from survey import show_survey
+
+if st.session_state["closed"]:
+
+    survey_data = show_survey()   # <-- MUSS zuerst ausgeführt werden!
+
+    if survey_data:
+        SURVEY_FILE = "survey_results.xlsx"
+
+        if os.path.exists(SURVEY_FILE):
+            df_old = pd.read_excel(SURVEY_FILE)
+            df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
+        else:
+            df = pd.DataFrame([survey_data])
+
+        df.to_excel(SURVEY_FILE, index=False)
+        st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
+
+    st.stop()
+
+
+# -----------------------------
+# [SECRETS & MODELL]
+# -----------------------------
+API_KEY = st.secrets["OPENAI_API_KEY"]
+MODEL  = st.secrets.get("OPENAI_MODEL", "gpt-4o-mini")
+ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
+
+
 
 # -----------------------------
 # [EXPERIMENTSPARAMETER – defaults]
