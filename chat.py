@@ -740,6 +740,7 @@ if not st.session_state["closed"]:
                 m for m in st.session_state["history"]
                 if m["role"] in ("user", "assistant")
             ])
+
             log_result(st.session_state["session_id"], False, None, msg_count)
 
             st.session_state["closed"] = True
