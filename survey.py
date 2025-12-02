@@ -1,5 +1,5 @@
 # ============================================
-# survey.py – Abschlussfragebogen (voll überarbeitet)
+# survey.py – Abschlussfragebogen (angepasst)
 # ============================================
 
 import streamlit as st
@@ -13,11 +13,10 @@ def show_survey():
     # 1. Alter
     # ---------------------------
     age = st.text_input("1. Wie alt sind Sie?")
-
     st.markdown("---")
 
     # ---------------------------
-    # 2. Geschlecht – oben m/w, unten d/keine Angabe
+    # 2. Geschlecht – oben m/w, darunter d/keine Angabe
     # ---------------------------
     st.write("2. Mit welchem Geschlecht identifizieren Sie sich?")
 
@@ -29,7 +28,7 @@ def show_survey():
 
     g3 = st.radio("   ", ["divers", "keine Angabe"], label_visibility="collapsed")
 
-    # Logik: welcher Radio wurde gedrückt?
+    # Logik
     if g1 == "männlich":
         gender = "männlich"
     elif g2 == "weiblich":
@@ -123,19 +122,19 @@ def show_survey():
     st.markdown("---")
 
     # ---------------------------
-    # 7. Gefühl, besseres Ergebnis möglich?
+    # 7. Preisliches Ergebnis (1 = keine Verbesserung, 10 = viel bessere Verbesserung)
     # ---------------------------
     better_result = labeled_scale(
         "7. Hätten Sie ein besseres preisliches Ergebnis erzielen können?",
-        "kein besseres Ergebnis",
-        "viel besseres Ergebnis",
+        "keine preisliche Verbesserung",
+        "viel bessere preisliche Verbesserung",
         "s_better"
     )
 
     st.markdown("---")
 
     # ---------------------------
-    # 8. Abweichung vom normalen Verhalten – SKALA 1–5
+    # 8. Dominanz / Nachgiebigkeit Skala (1–5 jede Stufe beschriftet)
     # ---------------------------
     st.write("8. Wie stark sind Sie von Ihrem normalen Verhandlungsverhalten abgewichen?")
 
@@ -144,18 +143,17 @@ def show_survey():
     labels = {
         1: "stark nachgiebig",
         2: "leicht nachgiebig",
-        3: "keine Abweichung",
+        3: "neutral",
         4: "leicht dominant",
         5: "stark dominant"
     }
 
-    # Label direkt unter Skala anzeigen
-    st.caption("   ".join([f"{i} = {labels[i]}" for i in range(1, 6)]))
+    st.caption("   ".join([f"{i} = {labels[i]}" for i in labels]))
 
     st.markdown("---")
 
     # ---------------------------
-    # 9. Verhandlungsbereitschaft im Alltag (1–10)
+    # 9. Verhandlungsbereitschaft im Alltag
     # ---------------------------
     willingness = labeled_scale(
         "9. Wie hoch ist Ihre Bereitschaft zu verhandeln im Alltag?",
@@ -167,7 +165,7 @@ def show_survey():
     st.markdown("---")
 
     # ---------------------------
-    # 10. Wiederverhandlung? (Ja / Nein nebeneinander)
+    # 10. Wiederverhandlung (Ja/Nein nebeneinander)
     # ---------------------------
     st.write("10. Würden Sie erneut mit dem Bot verhandeln wollen?")
 
