@@ -1,5 +1,5 @@
 # ============================================
-# survey.py – Abschlussfragebogen (mit Punkteskalen + responsiver Geschlechtsauswahl)
+# survey.py – Abschlussfragebogen (mit Punkteskalen & 4 Geschlechtsoptionen)
 # ============================================
 
 import streamlit as st
@@ -7,87 +7,44 @@ import streamlit as st
 def show_survey():
 
     # ================================
-    # Custom CSS
+    # Optische Punkteskala (●/○) unter dem Slider
     # ================================
-    st.markdown("""
-    <style>
-
-    /* Responsive Grid für Geschlecht */
-    .gender-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        gap: 4px;
-        margin-bottom: 5px;
-    }
-
-    /* Punkteskala Darstellung */
-    .scale-container {
-        width: 100%;
-        text-align: center;
-        margin: 0;
-        padding: 0;
-    }
-
-    .scale-points {
-        display: flex;
-        justify-content: space-between;
-        margin: 0 12px;
-        font-size: 22px;
-        letter-spacing: 2px;
-    }
-
-    .point {
-        user-select: none;
-    }
-
-    .point.selected {
-        color: black;
-        font-weight: bold;
-    }
-
-    .point.unselected {
-        color: #BBBBBB;
-    }
-
-    </style>
-    """, unsafe_allow_html=True)
-
-    # ================================
-    # Punkteskala-Funktion
-    # ================================
-    def point_scale(question, left_label, right_label, key, steps=10):
-
+    def point_scale(question, left_label, right_label, key, steps=10, default=None):
+        """
+        Zeigt:
+        - Frage
+        - Slider 1..steps
+        - Darunter eine Zeile mit Punkten (● für ausgewählten Wert, ○ für die anderen)
+        - Links/Rechts-Beschriftung (1 = left_label, steps = right_label)
+        """
         st.write(question)
 
-        # Startwert setzen
-        current_value = st.session_state.get(key, int((steps + 1) / 2))
+        if default is None:
+            default = (steps + 1) // 2  # Mittelwert als Start
 
-        # Unsichtbarer Slider, der den Wert speichert
-        slider_val = st.slider(
+        value = st.slider(
             label="",
             min_value=1,
             max_value=steps,
-            value=current_value,
+            value=default,
+            step=1,
             key=key,
             label_visibility="collapsed"
         )
 
-        # Punkteskala rendern
-        st.markdown('<div class="scale-container">', unsafe_allow_html=True)
-        st.markdown('<div class="scale-points">', unsafe_allow_html=True)
-
-        point_html = ""
+        # Punktezeile aufbauen
+        dots = []
         for i in range(1, steps + 1):
-            if i == slider_val:
-                css_class = "point selected"
-                symbol = "●"
+            if i == value:
+                dots.append("●")
             else:
-                css_class = "point unselected"
-                symbol = "○"
-            point_html += f'<span class="{css_class}">{symbol}</span>'
+                dots.append("○")
 
-        st.markdown(point_html, unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Punkte optisch zentriert & etwas größer darstellen
+        st.markdown(
+            f"<p style='font-size: 24px; text-align: center; margin: 0;'>{' '.join(dots)}</p>",
+            unsafe_allow_html=True
+        )
 
         # Beschriftungen links und rechts
         col_l, col_r = st.columns(2)
@@ -96,12 +53,11 @@ def show_survey():
         with col_r:
             st.caption(f"{steps} = {right_label}")
 
-        st.markdown("")
-
-        return slider_val
+        st.markdown("")  # kleiner Abstand unten
+        return value
 
     # ================================
-    # Beginn Fragebogen
+    # Fragebogen Kopf
     # ================================
     st.markdown("## 📋 Abschlussfragebogen zur Verhandlung")
     st.info("Bitte füllen Sie den Fragebogen aus. Ihre Antworten bleiben anonym.")
@@ -111,14 +67,17 @@ def show_survey():
     age = st.text_input("1. Wie alt sind Sie?")
     st.markdown("---")
 
-    # 2. Geschlecht – responsive Grid
+    # 2. Geschlecht – alle vier Optionen direkt sichtbar
     st.write("2. Mit welchem Geschlecht identifizieren Sie sich?")
 
-    gender_options = ["männlich", "weiblich", "divers", "keine Angabe"]
-
-    st.markdown('<div class="gender-grid">', unsafe_allow_html=True)
-    gender = st.radio("", gender_options, label_visibility="collapsed")
-    st.markdown("</div>", unsafe_allow_html=True)
+    # Eine Radio-Gruppe mit allen 4 Optionen, direkt sichtbar
+    # (Streamlit sorgt dafür, dass das auf kleineren Screens ggf. umbricht)
+    gender = st.radio(
+        "",
+        ["männlich", "weiblich", "divers", "keine Angabe"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
 
     st.markdown("---")
 
@@ -143,7 +102,7 @@ def show_survey():
     )
     st.markdown("---")
 
-    # 4. Fachbereich
+    # 4. Fachbereich (optional)
     field = None
     field_other = None
 
@@ -163,59 +122,90 @@ def show_survey():
 
     st.markdown("---")
 
-    # 5. Zufriedenheit Ergebnis
+    # 5. Zufriedenheit mit dem Ergebnis (1–10, sehr unzufrieden – sehr zufrieden)
     satisfaction_outcome = point_scale(
         "5. Wie zufrieden sind Sie mit dem Ergebnis der Verhandlung?",
-        "sehr unzufrieden",
-        "sehr zufrieden",
-        "s_outcome",
+        left_label="sehr unzufrieden",
+        right_label="sehr zufrieden",
+        key="s_outcome",
         steps=10
     )
+
     st.markdown("---")
 
-    # 6. Zufriedenheit Verlauf
+    # 6. Zufriedenheit mit dem Verlauf (1–10)
     satisfaction_process = point_scale(
         "6. Wie zufriedenstellend fanden Sie den Verlauf der Verhandlung?",
-        "sehr unzufrieden",
-        "sehr zufrieden",
-        "s_process",
+        left_label="sehr unzufrieden",
+        right_label="sehr zufrieden",
+        key="s_process",
         steps=10
     )
+
     st.markdown("---")
 
-    # 7. Preisliches Ergebnis
+    # 7. Preisliches Ergebnis (1–10, keine Verbesserung – viel bessere Verbesserung)
     better_result = point_scale(
         "7. Hätten Sie ein besseres preisliches Ergebnis erzielen können?",
-        "keine preisliche Verbesserung",
-        "viel bessere preisliche Verbesserung",
-        "s_better",
+        left_label="keine preisliche Verbesserung",
+        right_label="viel bessere preisliche Verbesserung",
+        key="s_better",
         steps=10
     )
+
     st.markdown("---")
 
-    # 8. Dominanzskala 1–5
-    deviation = point_scale(
-        "8. Wie dominant waren Sie im Vergleich zu Ihrem normalen Verhalten?",
-        "stark nachgiebig",
-        "stark dominant",
-        "s_deviation",
-        steps=5
+    # 8. Dominanz / Nachgiebigkeit (1–5, alle Stufen beschriftet)
+    st.write("8. Wie stark sind Sie von Ihrem normalen Verhandlungsverhalten abgewichen?")
+
+    deviation = st.slider(
+        label="",
+        min_value=1,
+        max_value=5,
+        value=3,
+        step=1,
+        label_visibility="collapsed",
+        key="s_deviation"
     )
+
+    # Alle Stufen textlich darstellen
+    labels = {
+        1: "stark nachgiebig",
+        2: "leicht nachgiebig",
+        3: "keine Abweichung",
+        4: "leicht dominant",
+        5: "stark dominant"
+    }
+
+    st.markdown(
+        "<p style='text-align: center; margin: 0;'>"
+        + " &nbsp;&nbsp; ".join([f"{i} = {txt}" for i, txt in labels.items()])
+        + "</p>",
+        unsafe_allow_html=True
+    )
+
     st.markdown("---")
 
-    # 9. Verhandlungsbereitschaft im Alltag
+    # 9. Verhandlungsbereitschaft im Alltag (1–10)
     willingness = point_scale(
         "9. Wie hoch ist Ihre Bereitschaft zu verhandeln im Alltag?",
-        "ich verhandle nie",
-        "ich verhandle fast immer",
-        "s_willing",
+        left_label="ich verhandle nie",
+        right_label="ich verhandle fast immer",
+        key="s_willing",
         steps=10
     )
+
     st.markdown("---")
 
-    # 10. Wiederverhandlung Ja/Nein
+    # 10. Würden Sie erneut mit dem Bot verhandeln? (Ja/Nein anklickbar)
     st.write("10. Würden Sie erneut mit dem Bot verhandeln wollen?")
-    again = st.radio("", ["Ja", "Nein"], horizontal=True)
+    again = st.radio(
+        "",
+        ["Ja", "Nein"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
     st.markdown("---")
 
     # Absenden
