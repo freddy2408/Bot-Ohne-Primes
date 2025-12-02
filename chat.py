@@ -679,26 +679,25 @@ for item in st.session_state["history"]:
 
 
 # 5) Deal bestätigen / Verhandlung beenden
-
 if not st.session_state["show_survey"]:
-deal_col1, deal_col2 = st.columns([1, 1])
 
-bot_offer = st.session_state.get("bot_offer", None)
-show_deal = (bot_offer is not None) and not st.session_state.get("closed", False)
+    deal_col1, deal_col2 = st.columns([1, 1])
 
-with deal_col1:
-    confirm = st.button(
-        f"💚 Deal bestätigen: {bot_offer} €" if show_deal else "Deal bestätigen",
-        use_container_width=True,
-        disabled=not show_deal
-    )
+    bot_offer = st.session_state.get("bot_offer", None)
+    show_deal = (bot_offer is not None) and not st.session_state.get("closed", False)
 
-with deal_col2:
-    cancel = st.button(
-        "❌ Verhandlung beenden",
-        use_container_width=True,
-    ) if not st.session_state.get("closed", False) else False
+    with deal_col1:
+        confirm = st.button(
+            f"💚 Deal bestätigen: {bot_offer} €" if show_deal else "Deal bestätigen",
+            use_container_width=True,
+            disabled=not show_deal
+        )
 
+    with deal_col2:
+        cancel = st.button(
+            "❌ Verhandlung beenden",
+            use_container_width=True,
+        ) if not st.session_state.get("closed", False) else False
 
 
 # 7) Deal-Bestätigung → Ergebnis speichern
