@@ -35,9 +35,6 @@ if "agreed_price" not in st.session_state:
 if "closed" not in st.session_state:
     st.session_state["closed"] = False  # Ob die Verhandlung abgeschlossen ist
 
-if "show_survey" not in st.session_state:
-    st.session_state["show_survey"] = False
-
 if "action" not in st.session_state:
     st.session_state["action"] = None
 
@@ -592,11 +589,11 @@ st.caption(f"Session-ID: `{st.session_state.sid}`")
 # ----------------------------
 from survey import show_survey
 
-if st.session_state["show_survey"]:
+if st.session_state["closed"]:
+
     survey_data = show_survey()
 
     if survey_data:
-        import pandas as pd, os
         SURVEY_FILE = "survey_results.xlsx"
 
         if os.path.exists(SURVEY_FILE):
@@ -609,8 +606,7 @@ if st.session_state["show_survey"]:
 
         st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
 
-    st.stop()  # wichtig, damit nichts anderes angezeigt wird
-
+    st.stop()  # NACH show_survey(), nicht davor
 
 # -----------------------------
 # [CHAT-UI – vollständig LLM-basiert]
@@ -710,7 +706,7 @@ if not st.session_state["closed"]:
     deal_col1, deal_col2 = st.columns([1, 1])
 
     bot_offer = st.session_state.get("bot_offer", None)
-    show_deal = (bot_offer is not None) and not st.session_state.get("closed", False)
+    show_deal = (bot_offer is not None)
 
     with deal_col1:
         if st.button(
@@ -723,11 +719,9 @@ if not st.session_state["closed"]:
             msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user","assistant")])
             log_result(st.session_state["session_id"], True, bot_price, msg_count)
 
-           # Deal speichern
+            # Direkt abschließen
             st.session_state["closed"] = True
-            st.session_state["show_survey"] = True
             st.experimental_rerun()
-
 
     with deal_col2:
         if st.button("❌ Verhandlung beenden", use_container_width=True):
@@ -736,9 +730,7 @@ if not st.session_state["closed"]:
             log_result(st.session_state["session_id"], False, None, msg_count)
 
             st.session_state["closed"] = True
-            st.session_state["show_survey"] = True
             st.experimental_rerun()
-
 
 # -----------------------------
 # [ADMIN-BEREICH: Ergebnisse (privat)]
