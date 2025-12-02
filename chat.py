@@ -60,9 +60,6 @@ MODEL  = st.secrets.get("OPENAI_MODEL", "gpt-4o-mini")
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
 
 # -----------------------------
-# [UI: Layout & Styles]
-# -----------------------------
-# -----------------------------
 # [UI: Layout & Styles + Titel mit Bild]
 # -----------------------------
 st.set_page_config(page_title="iPad-Verhandlung – Kontrollbedingung", page_icon="💬")
@@ -618,6 +615,31 @@ if st.session_state["show_survey"]:
     st.stop()  # <-- verhindert dass der Chat ab jetzt überhaupt weiterläuft
 
 
+# ================================
+# Falls Survey aktiv → sofort Fragebogen zeigen und Chat überspringen
+# ================================
+if st.session_state.get("show_survey", False):
+    from survey import show_survey
+
+    survey_data = show_survey()
+
+    # Wenn der Fragebogen abgeschickt wurde → Speichern
+    if survey_data:
+        import pandas as pd, os
+
+        SURVEY_FILE = "survey_results.xlsx"
+        if os.path.exists(SURVEY_FILE):
+            df_old = pd.read_excel(SURVEY_FILE)
+            df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
+        else:
+            df = pd.DataFrame([survey_data])
+
+        df.to_excel(SURVEY_FILE, index=False)
+        st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
+
+    st.stop()  # 💥 WICHTIG: verhindert dass der Chat geladen wird
+
+
 # -----------------------------
 # [CHAT-UI – vollständig LLM-basiert]
 # -----------------------------
@@ -724,47 +746,25 @@ if not st.session_state["show_survey"]:
             disabled=not show_deal,
             use_container_width=True
         ):
-            st.session_state["action"] = "confirm"
+            # Deal speichern
+            bot_price = st.session_state.get("bot_offer")
+            msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user","assistant")])
+            log_result(st.session_state["session_id"], True, bot_price, msg_count)
+
+            # Direkt Survey-Modus aktivieren
+            st.session_state["closed"] = True
+            st.session_state["show_survey"] = True
+            st.stop()
 
     with deal_col2:
-        if st.button(
-            "❌ Verhandlung beenden",
-            use_container_width=True
-        ):
-            st.session_state["action"] = "cancel"
+        if st.button("❌ Verhandlung beenden", use_container_width=True):
 
+            msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user","assistant")])
+            log_result(st.session_state["session_id"], False, None, msg_count)
 
-# ------------------------------
-# 7) Aktionen verarbeiten (Deal / Cancel)
-# ------------------------------
-#Deal
-if st.session_state["action"] == "confirm" and not st.session_state["closed"]:
-
-    bot_price = st.session_state.get("bot_offer")
-    msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
-
-    log_result(st.session_state["session_id"], True, bot_price, msg_count)
-
-    st.session_state["closed"] = True
-    st.session_state["show_survey"] = True
-    st.session_state["action"] = None
-    st.session_state["pending_rerun"] = True
-    st.stop()
-
-
-#Cancel
-elif st.session_state["action"] == "cancel" and not st.session_state["closed"]:
-
-    msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
-
-    log_result(st.session_state["session_id"], False, None, msg_count)
-
-    st.session_state["closed"] = True
-    st.session_state["show_survey"] = True
-    st.session_state["action"] = None
-    st.session_state["pending_rerun"] = True
-    st.stop()
-
+            st.session_state["closed"] = True
+            st.session_state["show_survey"] = True
+            st.stop()
 
 
 # -----------------------------
@@ -875,25 +875,24 @@ if pwd_ok:
 # ----------------------------
 from survey import show_survey
 
-survey_data = None
-
 if st.session_state["show_survey"]:
     survey_data = show_survey()
 
-# Wenn der Fragebogen abgeschickt wurde → speichern
-if survey_data:
-    import pandas as pd
-    import os
+    if survey_data:
+        import pandas as pd, os
+        SURVEY_FILE = "survey_results.xlsx"
 
-    SURVEY_FILE = "survey_results.xlsx"
+        if os.path.exists(SURVEY_FILE):
+            df_old = pd.read_excel(SURVEY_FILE)
+            df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
+        else:
+            df = pd.DataFrame([survey_data])
 
-    # Datei laden oder neu erstellen
-    if os.path.exists(SURVEY_FILE):
-        df_old = pd.read_excel(SURVEY_FILE)
-        df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
-    else:
-        df = pd.DataFrame([survey_data])
+        df.to_excel(SURVEY_FILE, index=False)
 
-    df.to_excel(SURVEY_FILE, index=False)
+        st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
 
-    st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
+    st.stop()  # wichtig, damit nichts anderes angezeigt wird
+
+
+    
