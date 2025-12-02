@@ -704,8 +704,9 @@ for item in st.session_state["history"]:
 
 
 # 5) Deal bestätigen / Verhandlung beenden
-if not st.session_state["closed"]:
-
+if st.session_state["closed"]:
+    pass  # Admin nicht anzeigen, wenn closed
+else:
     deal_col1, deal_col2 = st.columns([1, 1])
 
     bot_offer = st.session_state.get("bot_offer", None)
