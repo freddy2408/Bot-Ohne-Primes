@@ -148,9 +148,8 @@ st.markdown(CHAT_CSS, unsafe_allow_html=True)
 # ----------------------------
 from survey import show_survey
 
-if st.session_state["closed"]:
-
-    survey_data = show_survey()   # <-- MUSS zuerst ausgeführt werden!
+def run_survey_and_stop():
+    survey_data = show_survey()
 
     if survey_data:
         SURVEY_FILE = "survey_results.xlsx"
@@ -165,6 +164,11 @@ if st.session_state["closed"]:
         st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
 
     st.stop()
+
+# Wenn die Verhandlung bereits geschlossen wurde → sofort Fragebogen
+if st.session_state["closed"]:
+    run_survey_and_stop()
+
 
 
 # -----------------------------
@@ -704,37 +708,42 @@ for item in st.session_state["history"]:
 
 
 # 5) Deal bestätigen / Verhandlung beenden
-if st.session_state["closed"]:
-    pass  # Admin nicht anzeigen, wenn closed
-else:
+if not st.session_state["closed"]:
+
     deal_col1, deal_col2 = st.columns([1, 1])
 
     bot_offer = st.session_state.get("bot_offer", None)
     show_deal = (bot_offer is not None)
 
+    # DEAL-BUTTON
     with deal_col1:
         if st.button(
             f"💚 Deal bestätigen: {bot_offer} €" if show_deal else "Deal bestätigen",
             disabled=not show_deal,
             use_container_width=True
         ):
-            # Deal speichern
             bot_price = st.session_state.get("bot_offer")
-            msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user","assistant")])
+            msg_count = len([
+                m for m in st.session_state["history"]
+                if m["role"] in ("user", "assistant")
+            ])
             log_result(st.session_state["session_id"], True, bot_price, msg_count)
 
-            # Direkt abschließen
             st.session_state["closed"] = True
-            st.experimental_rerun()
+            run_survey_and_stop()
 
+    # ABBRUCH-BUTTON
     with deal_col2:
         if st.button("❌ Verhandlung beenden", use_container_width=True):
 
-            msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user","assistant")])
+            msg_count = len([
+                m for m in st.session_state["history"]
+                if m["role"] in ("user", "assistant")
+            ])
             log_result(st.session_state["session_id"], False, None, msg_count)
 
             st.session_state["closed"] = True
-            st.experimental_rerun()
+            run_survey_and_stop()
 
 # -----------------------------
 # [ADMIN-BEREICH: Ergebnisse (privat)]
@@ -837,7 +846,6 @@ if not st.session_state["closed"]:
 
                     st.session_state["confirm_delete"] = False
                     st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
-                    st.experimental_rerun()
 
         
 
