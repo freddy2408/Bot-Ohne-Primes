@@ -805,3 +805,16 @@ if pwd_ok:
                 st.experimental_rerun()
 
 
+# ----------------------------
+# Fragebogen
+# ----------------------------
+
+from survey import show_survey
+
+# Nach erfolgreichem Abschluss oder Abbruch:
+survey_data = show_survey()
+
+if survey_data:
+    # hier speichern, z. B. in SQLite
+    print("Neue Umfrage:", survey_data)
+
