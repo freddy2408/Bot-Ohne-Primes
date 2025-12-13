@@ -764,45 +764,45 @@ if user_input and not st.session_state["closed"]:
     ]
 
     # Nutzerpreis extrahieren
-nums = re.findall(r"\d{2,5}", user_input)
-user_price = int(nums[0]) if nums else None
+    nums = re.findall(r"\d{2,5}", user_input)
+    user_price = int(nums[0]) if nums else None
 
-decision, msg = check_abort_conditions(user_input, user_price)
+    decision, msg = check_abort_conditions(user_input, user_price)
 
-if decision == "abort":
-    st.session_state["closed"] = True
+    if decision == "abort":
+        st.session_state["closed"] = True
 
+        st.session_state["history"].append({
+            "role": "assistant",
+            "text": msg,
+            "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
+        })
+
+        msg_count = len([
+            m for m in st.session_state["history"]
+            if m["role"] in ("user", "assistant")
+        ])
+
+        log_result(st.session_state["session_id"], False, None, msg_count)
+        run_survey_and_stop()
+
+    elif decision == "warn":
+        bot_text = msg
+
+    else:
+        bot_text = generate_reply(llm_history, st.session_state.params)
+
+    # Bot-Nachricht speichern
     st.session_state["history"].append({
         "role": "assistant",
-        "text": msg,
+        "text": bot_text,
         "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
     })
 
-    msg_count = len([
-        m for m in st.session_state["history"]
-        if m["role"] in ("user", "assistant")
-    ])
-
-    log_result(st.session_state["session_id"], False, None, msg_count)
-    run_survey_and_stop()
-
-elif decision == "warn":
-    bot_text = msg
-
-else:
-    bot_text = generate_reply(llm_history, st.session_state.params)
-
-# Bot-Nachricht speichern
-st.session_state["history"].append({
-    "role": "assistant",
-    "text": bot_text,
-    "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
-})
-
-# Bot-Angebot extrahieren & speichern (wichtig für price_gap Logik!)
-new_offer = extract_price_from_bot(bot_text)
-if new_offer is not None:
-    st.session_state["bot_offer"] = new_offer
+    # Bot-Angebot extrahieren & speichern (wichtig für price_gap Logik!)
+    new_offer = extract_price_from_bot(bot_text)
+    if new_offer is not None:
+        st.session_state["bot_offer"] = new_offer
 
 
 # 4) Chat-Verlauf anzeigen (inkl. frischer Bot-Antwort) 
