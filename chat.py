@@ -39,6 +39,24 @@ if "action" not in st.session_state:
     st.session_state["action"] = None
 
 # -----------------------------
+# [NEGOTIATION CONTROL STATE]
+# -----------------------------
+if "repeat_offer_count" not in st.session_state:
+    st.session_state.repeat_offer_count = 0
+
+if "small_step_count" not in st.session_state:
+    st.session_state.small_step_count = 0
+
+if "last_user_price" not in st.session_state:
+    st.session_state.last_user_price = None
+
+if "warning_given" not in st.session_state:
+    st.session_state.warning_given = False
+
+if "bot_offer" not in st.session_state:
+    st.session_state["bot_offer"] = None
+
+# -----------------------------
 # [UI: Layout & Styles + Titel mit Bild]
 # -----------------------------
 st.set_page_config(page_title="iPad-Verhandlung – Kontrollbedingung", page_icon="💬")
@@ -198,6 +216,90 @@ if "sid" not in st.session_state:
     st.session_state.sid = str(uuid.uuid4())
 if "params" not in st.session_state:
     st.session_state.params = DEFAULT_PARAMS.copy()
+
+# -----------------------------
+# ABBRECHEN DER VERHANDLUNG
+# -----------------------------
+INSULT_PATTERNS = [
+    r"\b(fotze|hurensohn|wichser|arschloch|missgeburt)\b",
+    r"\b(verpiss dich|halt die fresse)\b",
+    r"\b(drecks(?:bot|kerl|typ))\b",
+]
+
+def check_abort_conditions(user_text: str, user_price: int | None):
+    for pat in INSULT_PATTERNS:
+        if re.search(pat, user_text.lower()):
+            return "abort", (
+                "Das Gespräch ist beendet. "
+                "Diese Art der Sprache akzeptiere ich nicht."
+            )
+
+    if user_price is None:
+        return "ok", None
+
+    last_price = st.session_state.last_user_price
+    bot_offer = st.session_state.get("bot_offer")
+
+    # 1) Angebot wiederholen
+    if last_price == user_price:
+        st.session_state.repeat_offer_count += 1
+    else:
+        st.session_state.repeat_offer_count = 0
+
+    if st.session_state.repeat_offer_count == 1:
+        return "warn", "Du wiederholst dein Angebot. Das registriere ich."
+    if st.session_state.repeat_offer_count >= 2:
+        return "abort", (
+            "Du bewegst dich keinen Schritt. "
+            "Unter diesen Bedingungen ist die Verhandlung beendet."
+        )
+
+    # 2) Rückschritte
+    if last_price and user_price < last_price:
+        if not st.session_state.warning_given:
+            st.session_state.warning_given = True
+            return "warn", (
+                "Du gehst preislich zurück. "
+                "Das ist kein ernsthafter Verhandlungsansatz. "
+                "Machen Sie ein vernünftiges Angebot, ansonsten ist die Verhandlung hier beendet!"
+            )
+        return "abort", (
+            "Rückschritte akzeptiere ich nicht. "
+            "Verhandlung beendet."
+        )
+
+    # 3) Mini-Erhöhungen trotz großer Distanz
+    if bot_offer and last_price is not None:
+
+        price_gap = bot_offer - user_price
+        step = user_price - last_price
+
+        if price_gap > 20 and 0 < step < 4:
+            st.session_state.small_step_count += 1
+
+            # wichtig: last_user_price hier updaten
+            st.session_state.last_user_price = user_price
+
+            if st.session_state.small_step_count == 1:
+                return "warn", (
+                    "Sie sind deutlich vom Preis entfernt "
+                    "und erhöhen nur minimal. "
+                    "Das registriere ich. "
+                    "Machen Sie ein vernünftiges Angebot, ansonsten ist die Verhandlung hier beendet!"
+                )
+
+            return "abort", (
+                "Ich habe dich bereits darauf hingewiesen. "
+                "Du erhöhst erneut nur minimal bei großem Abstand. "
+                "Unter diesen Bedingungen beende ich die Verhandlung."
+            )
+
+        # Reset nur wenn sinnvoll erhöht oder Abstand klein
+        if step >= 4 or price_gap <= 20:
+            st.session_state.small_step_count = 0
+
+    st.session_state.last_user_price = user_price
+    return "ok", None
 
 # -----------------------------
 # [REGELN: KEINE MACHTPRIMES + PREISFLOOR]
@@ -661,20 +763,46 @@ if user_input and not st.session_state["closed"]:
         for m in st.session_state["history"]
     ]
 
-    # KI-Antwort generieren
-    bot_text = generate_reply(llm_history, st.session_state.params)
+    # Nutzerpreis extrahieren
+nums = re.findall(r"\d{2,5}", user_input)
+user_price = int(nums[0]) if nums else None
 
-    # Bot-Nachricht speichern
+decision, msg = check_abort_conditions(user_input, user_price)
+
+if decision == "abort":
+    st.session_state["closed"] = True
+
     st.session_state["history"].append({
         "role": "assistant",
-        "text": bot_text,
+        "text": msg,
         "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
     })
 
-    # Bot-Gegenangebot extrahieren
-    bot_offer = extract_price_from_bot(bot_text)
-    st.session_state["bot_offer"] = bot_offer
+    msg_count = len([
+        m for m in st.session_state["history"]
+        if m["role"] in ("user", "assistant")
+    ])
 
+    log_result(st.session_state["session_id"], False, None, msg_count)
+    run_survey_and_stop()
+
+elif decision == "warn":
+    bot_text = msg
+
+else:
+    bot_text = generate_reply(llm_history, st.session_state.params)
+
+# Bot-Nachricht speichern
+st.session_state["history"].append({
+    "role": "assistant",
+    "text": bot_text,
+    "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
+})
+
+# Bot-Angebot extrahieren & speichern (wichtig für price_gap Logik!)
+new_offer = extract_price_from_bot(bot_text)
+if new_offer is not None:
+    st.session_state["bot_offer"] = new_offer
 
 
 # 4) Chat-Verlauf anzeigen (inkl. frischer Bot-Antwort) 
