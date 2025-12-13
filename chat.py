@@ -97,7 +97,7 @@ st.markdown(f"""
 
 <div class="header-flex">
     <img src="data:image/png;base64,{ipad_b64}" class="header-img">
-    <div class="header-title">iPad-Verhandlung – ohne Machtprimes</div>
+    <div class="header-title">iPad-Verhandlung</div>
 </div>
 """, unsafe_allow_html=True)
 
