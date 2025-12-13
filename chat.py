@@ -230,8 +230,8 @@ def check_abort_conditions(user_text: str, user_price: int | None):
     for pat in INSULT_PATTERNS:
         if re.search(pat, user_text.lower()):
             return "abort", (
-                "Das Gespräch ist beendet. "
-                "Diese Art der Sprache akzeptiere ich nicht."
+                "Ich beende die Verhandlung an dieser Stelle. "
+                "Ein respektvoller Umgang ist für mich Voraussetzung."
             )
 
     if user_price is None:
@@ -247,11 +247,12 @@ def check_abort_conditions(user_text: str, user_price: int | None):
         st.session_state.repeat_offer_count = 0
 
     if st.session_state.repeat_offer_count == 1:
-        return "warn", "Du wiederholst dein Angebot. Das registriere ich."
+        return "warn", "Dein Angebot ist identisch mit dem vorherigen. " "Bitte schlage einen neuen Preis vor, damit wir weiter verhandeln können."
+
     if st.session_state.repeat_offer_count >= 2:
         return "abort", (
-            "Du bewegst dich keinen Schritt. "
-            "Unter diesen Bedingungen ist die Verhandlung beendet."
+            "Da sich dein Angebot erneut nicht verändert hat, "
+            "sehe ich aktuell keine Grundlage für eine weitere Verhandlung und beende sie."
         )
 
     # 2) Rückschritte
@@ -259,13 +260,14 @@ def check_abort_conditions(user_text: str, user_price: int | None):
         if not st.session_state.warning_given:
             st.session_state.warning_given = True
             return "warn", (
-                "Du gehst preislich zurück. "
-                "Das ist kein ernsthafter Verhandlungsansatz. "
-                "Machen Sie ein vernünftiges Angebot, ansonsten ist die Verhandlung hier beendet!"
+                "Dein neues Angebot liegt unter deinem vorherigen. "
+                "Das erschwert eine konstruktive Verhandlung. "
+                "Bitte bleib bei steigenden Angeboten, sonst muss ich die Verhandlung beenden."
             )
         return "abort", (
-            "Rückschritte akzeptiere ich nicht. "
-            "Verhandlung beendet."
+            "Da der Preis erneut gesunken ist, "
+            "beende ich die Verhandlung an dieser Stelle."
+
         )
 
     # 3) Mini-Erhöhungen trotz großer Distanz
@@ -282,16 +284,14 @@ def check_abort_conditions(user_text: str, user_price: int | None):
 
             if st.session_state.small_step_count == 1:
                 return "warn", (
-                    "Sie sind deutlich vom Preis entfernt "
-                    "und erhöhen nur minimal. "
-                    "Das registriere ich. "
-                    "Machen Sie ein vernünftiges Angebot, ansonsten ist die Verhandlung hier beendet!"
+                    "Dein Angebot liegt noch deutlich unter meinem Preis, "
+                    "und die Erhöhung fällt sehr gering aus. "
+                    "Für eine sinnvolle Verhandlung brauche ich größere Schritte."
                 )
 
             return "abort", (
-                "Ich habe dich bereits darauf hingewiesen. "
-                "Du erhöhst erneut nur minimal bei großem Abstand. "
-                "Unter diesen Bedingungen beende ich die Verhandlung."
+                "Da sich das Muster trotz Hinweises wiederholt, "
+                "beende ich die Verhandlung an dieser Stelle."
             )
 
         # Reset nur wenn sinnvoll erhöht oder Abstand klein
