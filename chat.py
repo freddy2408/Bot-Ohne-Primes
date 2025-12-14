@@ -160,18 +160,20 @@ CHAT_CSS = """
 
 st.markdown(CHAT_CSS, unsafe_allow_html=True)
 
-
+SURVEY_FILE = "survey_results.xlsx"
 # ----------------------------
 # Fragebogen (nur nach Abschluss)
 # ----------------------------
 from survey import show_survey
 
 def run_survey_and_stop():
+
+    if st.session_state.get("admin_reset_done"):
+        st.stop()
+
     survey_data = show_survey()
 
     if survey_data:
-        SURVEY_FILE = "survey_results.xlsx"
-
         if os.path.exists(SURVEY_FILE):
             df_old = pd.read_excel(SURVEY_FILE)
             df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
@@ -970,14 +972,17 @@ if not st.session_state["closed"]:
 
             with col2:
                 if st.button("✅ Ja, löschen"):
+                    # Verhandlungsergebnisse (SQLite)
                     conn = sqlite3.connect(DB_PATH)
                     c = conn.cursor()
                     c.execute("DELETE FROM results")
                     conn.commit()
                     conn.close()
 
+                    # Umfrageergebnisse (Excel)
+                    if os.path.exists(SURVEY_FILE):
+                        os.remove(SURVEY_FILE)
+
                     st.session_state["confirm_delete"] = False
                     st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
-
-        
-
+                    st.experimental_rerun()
