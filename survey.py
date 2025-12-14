@@ -1,5 +1,5 @@
 # ============================================
-# survey.py – Abschlussfragebogen (stabil & gut sichtbar)
+# survey.py – Abschlussfragebogen (1–6 Skalen, ohne Vorauswahl)
 # ============================================
 
 import streamlit as st
@@ -16,21 +16,23 @@ def show_survey():
     st.markdown("---")
 
     # ---------------------------
-    # 2. Geschlecht – alle vier Optionen direkt sichtbar (kein Dropdown)
+    # 2. Geschlecht – keine Vorauswahl
     # ---------------------------
     st.write("2. Mit welchem Geschlecht identifizieren Sie sich?")
 
     gender = st.radio(
         "",
-        ["männlich", "weiblich", "divers", "keine Angabe"],
-        horizontal=True,           # versucht, sie nebeneinander darzustellen
-        label_visibility="collapsed"
+        ["männlich", "weiblich", "divers"],
+        index=None,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="gender"
     )
-    # Auf schmalen Displays bricht Streamlit die Buttons automatisch um.
+
     st.markdown("---")
 
     # ---------------------------
-    # 3. Bildungsabschluss
+    # 3. Bildungsabschluss – keine Vorauswahl
     # ---------------------------
     education = st.selectbox(
         "3. Welcher ist Ihr höchster Bildungsabschluss?",
@@ -42,14 +44,16 @@ def show_survey():
             "Allgemeine Hochschulreife (Abitur)",
             "Berufsausbildung",
             "Bachelor",
-            "Master",
             "Diplom",
+            "Master",
             "Staatsexamen",
             "Promotion",
             "Habilitation",
             "Sonstiger Abschluss"
-        ]
+        ],
+        index=None
     )
+
     st.markdown("---")
 
     # ---------------------------
@@ -58,7 +62,11 @@ def show_survey():
     field = None
     field_other = None
 
-    if education in ["Bachelor", "Master", "Diplom", "Staatsexamen", "Promotion", "Habilitation", "Sonstiger Abschluss"]:
+    if education in [
+        "Bachelor", "Master", "Diplom",
+        "Staatsexamen", "Promotion",
+        "Habilitation", "Sonstiger Abschluss"
+    ]:
         field = st.selectbox(
             "4. In welchem Fachbereich liegt Ihr Studium / Abschluss?",
             [
@@ -67,27 +75,25 @@ def show_survey():
                 "Wirtschaft und Recht",
                 "Soziale Arbeit und Gesundheit",
                 "Andere"
-            ]
+            ],
+            index=None
         )
+
         if field == "Andere":
             field_other = st.text_input("Bitte geben Sie an, welcher Fachbereich:")
 
     st.markdown("---")
 
     # -------------------------------------------------------
-    # Hilfsfunktion: diskrete Skala mit 1..N (sichtbare Marken)
+    # Hilfsfunktion: Skala 1–6 OHNE Vorauswahl
     # -------------------------------------------------------
-    def labeled_select_scale(question, left_label, right_label, key, max_value=10, default=None):
+    def labeled_select_scale(question, left_label, right_label, key):
         st.write(question)
-
-        options = list(range(1, max_value + 1))
-        if default is None:
-            default = (max_value + 1) // 2
 
         value = st.select_slider(
             label="",
-            options=options,
-            value=default,
+            options=[1, 2, 3, 4, 5, 6],
+            value=None,                     # keine Vorauswahl
             key=key,
             label_visibility="collapsed"
         )
@@ -96,92 +102,92 @@ def show_survey():
         with col_l:
             st.caption(f"1 = {left_label}")
         with col_r:
-            st.caption(f"{max_value} = {right_label}")
+            st.caption(f"6 = {right_label}")
 
         st.markdown("")
         return value
 
     # ---------------------------
-    # 5. Zufriedenheit Ergebnis (1–10)
+    # 5. Zufriedenheit Ergebnis (1–6)
     # ---------------------------
     satisfaction_outcome = labeled_select_scale(
         "5. Wie zufrieden sind Sie mit dem Ergebnis der Verhandlung?",
-        left_label="sehr unzufrieden",
-        right_label="sehr zufrieden",
-        key="s_outcome",
-        max_value=10
+        "sehr unzufrieden",
+        "sehr zufrieden",
+        key="s_outcome"
     )
     st.markdown("---")
 
     # ---------------------------
-    # 6. Zufriedenheit Verlauf (1–10)
+    # 6. Zufriedenheit Verlauf (1–6)
     # ---------------------------
     satisfaction_process = labeled_select_scale(
         "6. Wie zufriedenstellend fanden Sie den Verlauf der Verhandlung?",
-        left_label="sehr unzufrieden",
-        right_label="sehr zufrieden",
-        key="s_process",
-        max_value=10
+        "sehr unzufrieden",
+        "sehr zufrieden",
+        key="s_process"
     )
     st.markdown("---")
 
     # ---------------------------
-    # 7. Preisliches Ergebnis (1–10)
+    # 7. Preisliches Ergebnis (1–6)
     # ---------------------------
     better_result = labeled_select_scale(
         "7. Hätten Sie ein besseres preisliches Ergebnis erzielen können?",
-        left_label="keine preisliche Verbesserung",
-        right_label="viel bessere preisliche Verbesserung",
-        key="s_better",
-        max_value=10
+        "keine preisliche Verbesserung",
+        "viel bessere preisliche Verbesserung",
+        key="s_better"
     )
     st.markdown("---")
 
     # ---------------------------
-    # 8. Abweichung Dominanz / Nachgiebigkeit (1–5, alle beschriftet)
+    # 8. Abweichung Verhandlungsstil (1–6)
     # ---------------------------
     st.write("8. Wie stark sind Sie von Ihrem normalen Verhandlungsverhalten abgewichen?")
 
     deviation = st.select_slider(
         label="",
-        options=[1, 2, 3, 4, 5],
-        value=3,
+        options=[1, 2, 3, 4, 5, 6],
+        value=None,
         label_visibility="collapsed",
         key="s_deviation"
     )
 
     labels = {
-        1: "stark nachgiebig",
-        2: "leicht nachgiebig",
-        3: "keine Abweichung",
+        1: "sehr nachgiebig",
+        2: "nachgiebig",
+        3: "leicht nachgiebig",
         4: "leicht dominant",
-        5: "stark dominant"
+        5: "dominant",
+        6: "sehr dominant"
     }
 
-    st.caption("   ".join([f"{i} = {labels[i]}" for i in range(1, 6)]))
+    st.caption("   ".join([f"{i} = {labels[i]}" for i in range(1, 7)]))
     st.markdown("---")
 
     # ---------------------------
-    # 9. Verhandlungsbereitschaft im Alltag (1–10)
+    # 9. Verhandlungsbereitschaft im Alltag (1–6)
     # ---------------------------
     willingness = labeled_select_scale(
         "9. Wie hoch ist Ihre Bereitschaft zu verhandeln im Alltag?",
-        left_label="ich verhandle nie",
-        right_label="ich verhandle fast immer",
-        key="s_willing",
-        max_value=10
+        "ich verhandle nie",
+        "ich verhandle fast immer",
+        key="s_willing"
     )
     st.markdown("---")
 
     # ---------------------------
-    # 10. Wiederverhandlung (Ja / Nein)
+    # 10. Wiederverhandlung – keine Vorauswahl
     # ---------------------------
     st.write("10. Würden Sie erneut mit dem Bot verhandeln wollen?")
+
     again = st.radio(
         "",
         ["Ja", "Nein"],
+        index=None,
         horizontal=True,
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        key="again"
     )
 
     st.markdown("---")
