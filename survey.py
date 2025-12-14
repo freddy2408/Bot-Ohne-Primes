@@ -35,7 +35,7 @@ def show_survey():
     # 3. Bildungsabschluss – keine Vorauswahl
     # ---------------------------
     education = st.selectbox(
-        "3. Welcher ist Ihr höchster Bildungsabschluss?",
+        "3. Welcher ist Ihr höchster angestrebter Bildungsabschluss?",
         [
             "Kein Abschluss",
             "Hauptschulabschluss",
