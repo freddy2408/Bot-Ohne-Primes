@@ -472,7 +472,7 @@ def call_openai(messages, temperature=0.3, max_tokens=240):
 def generate_reply(history, params: dict) -> str:
     WRONG_CAPACITY_PATTERN = r"\b(32|64|128|512|800|1000|1tb|2tb)\s?gb\b"
 
-        # Utility: Rundet auf 5er Schritte
+    # Utility: Rundet auf 5er Schritte
     def round_to_5(value: int) -> int:
         return int(round(value / 5) * 5)
 
@@ -894,6 +894,15 @@ if user_input and not st.session_state["closed"]:
         "text": user_input.strip(),
         "ts": now,
     })
+    msg_index = len(st.session_state["history"]) - 1
+    log_chat_message(
+        st.session_state["session_id"],
+        "user",
+        user_input.strip(),
+        now,
+        msg_index
+    )
+
 
     # LLM-Verlauf vorbereiten (role/content)
     llm_history = [
@@ -1018,147 +1027,154 @@ if not st.session_state["closed"]:
 # -----------------------------
 # [ADMIN-BEREICH: Ergebnisse (privat)]
 # -----------------------------
-if not st.session_state["closed"]:
-    st.sidebar.header("📊 Ergebnisse")
-    pwd_ok = False
-    dashboard_password = st.secrets.get("DASHBOARD_PASSWORD", os.environ.get("DASHBOARD_PASSWORD"))
-    pwd_input = st.sidebar.text_input("Passwort für Dashboard", type="password")
-    if dashboard_password:
-        if pwd_input and pwd_input == dashboard_password:
-            pwd_ok = True
-        elif pwd_input and pwd_input != dashboard_password:
-            st.sidebar.warning("Falsches Passwort.")
-    else:
-        st.sidebar.info("Kein Passwort gesetzt (DASHBOARD_PASSWORD). Dashboard ist deaktiviert.")
+st.sidebar.header("📊 Ergebnisse")
 
-    if pwd_ok:
-        st.sidebar.success("Zugang gewährt.")
+pwd_ok = False
+dashboard_password = st.secrets.get("DASHBOARD_PASSWORD", os.environ.get("DASHBOARD_PASSWORD"))
+pwd_input = st.sidebar.text_input("Passwort für Dashboard", type="password")
 
-        with st.sidebar.expander("Alle Verhandlungsergebnisse", expanded=True):
-            if os.path.exists("survey_results.xlsx"):
-                df_s = pd.read_excel("survey_results.xlsx")
-                st.dataframe(df_s, use_container_width=True)
+if dashboard_password:
+    if pwd_input and pwd_input == dashboard_password:
+        pwd_ok = True
+    elif pwd_input and pwd_input != dashboard_password:
+        st.sidebar.warning("Falsches Passwort.")
+else:
+    st.sidebar.info("Kein Passwort gesetzt (DASHBOARD_PASSWORD). Dashboard ist deaktiviert.")
 
-                from io import BytesIO
-                buf = BytesIO()
-                df_s.to_excel(buf, index=False)
-                buf.seek(0)
+if pwd_ok:
+    st.sidebar.success("Zugang gewährt.")
 
-                st.download_button(
-                    "Umfrage als Excel herunterladen",
-                    buf,
-                    file_name="survey_results_download.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            else:
-                st.info("Noch keine Umfrage-Daten vorhanden.")
+    # =============================
+    # 📋 Umfrageergebnisse
+    # =============================
+    with st.sidebar.expander("📋 Umfrageergebnisse", expanded=False):
+        if os.path.exists("survey_results.xlsx"):
+            df_s = pd.read_excel("survey_results.xlsx")
+            st.dataframe(df_s, use_container_width=True)
 
+            from io import BytesIO
+            buf = BytesIO()
+            df_s.to_excel(buf, index=False)
+            buf.seek(0)
 
-            df = load_results_df()
-
-            st.markdown("---")
-            st.subheader("💬 Chatverlauf anzeigen")
-
-            if len(df) > 0:
-                selected_session = st.selectbox("Verhandlung auswählen", df["session_id"].unique())
-            else:
-                selected_session = None
-
-            if selected_session:
-                chat_df = load_chat_for_session(selected_session)
-
-                if not chat_df.empty:
-                    st.caption(
-                        f"Participant: `{chat_df['participant_id'].iloc[0]}` | "
-                        f"Bot: `{chat_df['bot_variant'].iloc[0]}`"
-                    )
-
-                BOT_AVATAR  = img_to_base64("bot.png")
-                USER_AVATAR = img_to_base64("user.png")
-
-                st.markdown("### 💬 Chatverlauf")
-
-                for _, row in chat_df.iterrows():
-                    is_user = row["role"] == "user"
-                    avatar_b64 = USER_AVATAR if is_user else BOT_AVATAR
-                    side = "right" if is_user else "left"
-                    klass = "msg-user" if is_user else "msg-bot"
-
-                    st.markdown(f"""
-                    <div class="row {side}">
-                        <img src="data:image/png;base64,{avatar_b64}" class="avatar">
-                        <div class="chat-bubble {klass}">
-                            {row["text"]}
-                        </div>
-                    </div>
-                    <div class="row {side}">
-                        <div class="meta">{row["ts"]}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-
-            if len(df) == 0:
-                st.write("Noch keine Ergebnisse gespeichert.")
-
-            else:
-                # neue Nummerierung hinzufügen (1, 2, 3, ...)
-                df = df.reset_index(drop=True)
-                df["nr"] = df.index + 1
-                df = df[["nr", "ts", "participant_id", "session_id", "bot_variant", "order_id", "step", "deal", "price", "msg_count"]]
-
-
-                st.dataframe(df, use_container_width=True, hide_index=True)
-
-                from io import BytesIO
-                buffer = BytesIO()
-                df.to_excel(buffer, index=False)
-                buffer.seek(0)
-
-                st.download_button(
-                    "Excel herunterladen",
-                    buffer,
-                    file_name="verhandlungsergebnisse.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
-
-    # ----------------------------
-    # Admin Reset mit Bestätigung
-    # ----------------------------
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("Admin-Tools")
-
-        # Zustand für Sicherheitsabfrage speichern
-        if "confirm_delete" not in st.session_state:
-            st.session_state["confirm_delete"] = False
-
-        # Erste Stufe: Benutzer klickt → Sicherheitswarnung erscheint
-        if not st.session_state["confirm_delete"]:
-            if st.sidebar.button("🗑️ Alle Ergebnisse löschen"):
-                st.session_state["confirm_delete"] = True
-                st.sidebar.warning("⚠️ Bist du sicher, dass du **ALLE Ergebnisse** löschen möchtest?")
-                st.sidebar.info("Dieser Vorgang kann nicht rückgängig gemacht werden.")
+            st.download_button(
+                "Umfrage als Excel herunterladen",
+                buf,
+                file_name="survey_results_download.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
         else:
-            # Zweite Stufe: Zwei Buttons erscheinen
-            col1, col2 = st.sidebar.columns(2)
+            st.info("Noch keine Umfrage-Daten vorhanden.")
 
-            with col1:
-                if st.button("❌ Abbrechen"):
-                    st.session_state["confirm_delete"] = False
+    # =============================
+    # 📊 Verhandlungsergebnisse
+    # =============================
+    with st.sidebar.expander("Alle Verhandlungsergebnisse", expanded=True):
+        df = load_results_df()
 
-            with col2:
-                if st.button("✅ Ja, löschen"):
-                    # Verhandlungsergebnisse (SQLite)
-                    conn = sqlite3.connect(DB_PATH)
-                    c = conn.cursor()
-                    c.execute("DELETE FROM results")
-                    conn.commit()
-                    conn.close()
+        if len(df) == 0:
+            st.write("Noch keine Ergebnisse gespeichert.")
+        else:
+            df = df.reset_index(drop=True)
+            df["nr"] = df.index + 1
+            df = df[["nr", "ts", "participant_id", "session_id", "bot_variant", "order_id", "step", "deal", "price", "msg_count"]]
 
-                    # Umfrageergebnisse (Excel)
-                    if os.path.exists(SURVEY_FILE):
-                        os.remove(SURVEY_FILE)
+            st.dataframe(df, use_container_width=True, hide_index=True)
 
-                    st.session_state["confirm_delete"] = False
-                    st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
-                    st.experimental_rerun()
+            from io import BytesIO
+            buffer = BytesIO()
+            df.to_excel(buffer, index=False)
+            buffer.seek(0)
+
+            st.download_button(
+                "Excel herunterladen",
+                buffer,
+                file_name="verhandlungsergebnisse.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+        # -----------------------------
+        # Session-Auswahl für Chat
+        # -----------------------------
+        st.markdown("---")
+        st.subheader("💬 Chatverlauf anzeigen")
+
+        selected_session = st.selectbox(
+            "Verhandlung auswählen",
+            df["session_id"].unique()
+        )
+
+        # -----------------------------
+        # Chat-Nachrichten anzeigen
+        # -----------------------------
+        if selected_session:
+            chat_df = load_chat_for_session(selected_session)
+
+            BOT_AVATAR  = img_to_base64("bot.png")
+            USER_AVATAR = img_to_base64("user.png")
+
+            st.markdown("### 💬 Chatverlauf")
+
+            for _, row in chat_df.iterrows():
+                is_user = row["role"] == "user"
+                avatar_b64 = USER_AVATAR if is_user else BOT_AVATAR
+                side = "right" if is_user else "left"
+                klass = "msg-user" if is_user else "msg-bot"
+
+                st.markdown(f"""
+                <div class="row {side}">
+                    <img src="data:image/png;base64,{avatar_b64}" class="avatar">
+                    <div class="chat-bubble {klass}">
+                        {row["text"]}
+                    </div>
+                </div>
+                <div class="row {side}">
+                    <div class="meta">{row["ts"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+# ----------------------------
+# Admin Reset mit Bestätigung
+# ----------------------------
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Admin-Tools")
+
+    # Zustand für Sicherheitsabfrage speichern
+    if "confirm_delete" not in st.session_state:
+        st.session_state["confirm_delete"] = False
+
+    # Erste Stufe: Benutzer klickt → Sicherheitswarnung erscheint
+    if not st.session_state["confirm_delete"]:
+        if st.sidebar.button("🗑️ Alle Ergebnisse löschen"):
+            st.session_state["confirm_delete"] = True
+            st.sidebar.warning("⚠️ Bist du sicher, dass du **ALLE Ergebnisse** löschen möchtest?")
+            st.sidebar.info("Dieser Vorgang kann nicht rückgängig gemacht werden.")
+    else:
+        # Zweite Stufe: Zwei Buttons erscheinen
+        col1, col2 = st.sidebar.columns(2)
+
+        with col1:
+            if st.button("❌ Abbrechen"):
+                st.session_state["confirm_delete"] = False
+
+
+        with col2:
+            if st.button("✅ Ja, löschen"):
+                # Verhandlungsergebnisse (SQLite)
+                conn = sqlite3.connect(DB_PATH)
+                c = conn.cursor()
+                c.execute("DELETE FROM results")
+                c.execute("DELETE FROM chat_messages")
+                conn.commit()
+                conn.close()
+
+                # Umfrageergebnisse (Excel)
+                if os.path.exists(SURVEY_FILE):
+                    os.remove(SURVEY_FILE)
+
+                st.session_state["confirm_delete"] = False
+                st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
+                st.experimental_rerun()
+
+                
