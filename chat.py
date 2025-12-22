@@ -859,14 +859,21 @@ if len(st.session_state["history"]) == 0:
         "Was schwebt dir preislich vor?"
     )
     bot_ts = datetime.now(tz).strftime("%d.%m.%Y %H:%M")
+
     st.session_state["history"].append({
         "role": "assistant",
-        "text": bot_text,
+        "text": first_msg,   # ✅ statt bot_text
         "ts": bot_ts,
     })
 
     msg_index = len(st.session_state["history"]) - 1
-    log_chat_message(st.session_state["session_id"], "assistant", bot_text, bot_ts, msg_index)
+    log_chat_message(
+        st.session_state["session_id"],
+        "assistant",
+        first_msg,           # ✅ statt bot_text
+        bot_ts,
+        msg_index
+    )
 
 
 # 2) Eingabefeld
