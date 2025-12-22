@@ -204,8 +204,9 @@ def run_survey_and_stop():
 
     survey_data = show_survey()
 
-    if survey_data:
-        # join keys anhängen!
+    # ✅ wichtig: nicht "if survey_data", sondern dict-check
+    if isinstance(survey_data, dict):
+        # join keys anhängen
         survey_data["participant_id"] = PID
         survey_data["session_id"] = SID
         survey_data["bot_variant"] = BOT_VARIANT
@@ -213,7 +214,7 @@ def run_survey_and_stop():
         survey_data["step"] = STEP
         survey_data["survey_ts_utc"] = datetime.utcnow().isoformat()
 
-        # speichern wie bisher
+        # speichern
         if os.path.exists(SURVEY_FILE):
             df_old = pd.read_excel(SURVEY_FILE)
             df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
@@ -223,15 +224,11 @@ def run_survey_and_stop():
         df.to_excel(SURVEY_FILE, index=False)
         st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
 
-        # Weiterleitung zu Teil 2 (nur wenn step==1 sinnvoll; bei step==2 eher Abschlussseite)
-        if STEP == "1":
-            st.link_button("➡️ Weiter zu Teil 2", get_next_url(PID, ORDER, BOT_VARIANT), use_container_width=True)
-            st.caption("Bitte klicke auf den Button, um zum zweiten Teil zu gelangen.")
-        else:
-            st.success("✅ Studie abgeschlossen. Danke!")
+        # ✅ zum Testen immer Button zeigen
+        st.link_button("➡️ Weiter zu Teil 2", get_next_url(PID, ORDER, BOT_VARIANT), use_container_width=True)
+        st.caption("Bitte klicke auf den Button, um zum zweiten Teil zu gelangen.")
 
         st.stop()
-
     # solange Survey noch nicht abgeschickt: nicht stoppen
     # (show_survey rendert Form)
 
