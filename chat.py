@@ -19,7 +19,26 @@ def img_to_base64(path):
         data = f.read()
         return base64.b64encode(data).decode()
 
-# -----------------------------
+#
+# --------------------------------
+# Session State initialisieren
+# --------------------------------
+if "session_id" not in st.session_state:
+    st.session_state["session_id"] = str(uuid.uuid4())
+
+if "history" not in st.session_state:
+    st.session_state["history"] = []  # Chat-Verlauf als Liste von Dicts
+
+if "agreed_price" not in st.session_state:
+    st.session_state["agreed_price"] = None  # Preis, der per Deal-Button bestätigt werden kann
+
+if "closed" not in st.session_state:
+    st.session_state["closed"] = False  # Ob die Verhandlung abgeschlossen ist
+
+if "action" not in st.session_state:
+    st.session_state["action"] = None
+
+ -----------------------------
 # Participant ID + Order (shared across bots)
 # -----------------------------
 def get_pid() -> str:
@@ -50,25 +69,6 @@ def get_next_url(pid: str, order: str, bot_variant: str) -> str:
         return f"{BOT_B_URL}?pid={pid}&order={order}&step=2"
     else:
         return f"{BOT_A_URL}?pid={pid}&order={order}&step=2"
-
-
-# --------------------------------
-# Session State initialisieren
-# --------------------------------
-if "session_id" not in st.session_state:
-    st.session_state["session_id"] = str(uuid.uuid4())
-
-if "history" not in st.session_state:
-    st.session_state["history"] = []  # Chat-Verlauf als Liste von Dicts
-
-if "agreed_price" not in st.session_state:
-    st.session_state["agreed_price"] = None  # Preis, der per Deal-Button bestätigt werden kann
-
-if "closed" not in st.session_state:
-    st.session_state["closed"] = False  # Ob die Verhandlung abgeschlossen ist
-
-if "action" not in st.session_state:
-    st.session_state["action"] = None
 
 # -----------------------------
 # [NEGOTIATION CONTROL STATE]
