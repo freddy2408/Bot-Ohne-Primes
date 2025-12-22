@@ -19,12 +19,44 @@ def img_to_base64(path):
         data = f.read()
         return base64.b64encode(data).decode()
 
+# -----------------------------
+# Participant ID + Order (shared across bots)
+# -----------------------------
+def get_pid() -> str:
+    pid = st.query_params.get("pid", None)
+    if not pid:
+        pid = f"p-{uuid.uuid4().hex[:10]}"
+        st.query_params["pid"] = pid
+    return str(pid)
+
+if "participant_id" not in st.session_state:
+    st.session_state["participant_id"] = get_pid()
+
+ORDER = str(st.query_params.get("order", ""))
+STEP  = str(st.query_params.get("step", ""))
+
+BOT_VARIANT = "friendly"
+
+PID = st.session_state["participant_id"]
+SID = st.session_state["session_id"]
+
+
+BOT_A_URL = "https://verhandlung123.streamlit.app"
+BOT_B_URL = "https://verhandlung.streamlit.app"
+
+def get_next_url(pid: str, order: str, bot_variant: str) -> str:
+    # bot_variant: "power" = Bot A, "friendly" = Bot B
+    if bot_variant == "power":
+        return f"{BOT_B_URL}?pid={pid}&order={order}&step=2"
+    else:
+        return f"{BOT_A_URL}?pid={pid}&order={order}&step=2"
+
 
 # --------------------------------
 # Session State initialisieren
 # --------------------------------
 if "session_id" not in st.session_state:
-    st.session_state["session_id"] = f"sess-{int(time.time())}"
+    st.session_state["session_id"] = str(uuid.uuid4())
 
 if "history" not in st.session_state:
     st.session_state["history"] = []  # Chat-Verlauf als Liste von Dicts
@@ -167,13 +199,21 @@ SURVEY_FILE = "survey_results.xlsx"
 from survey import show_survey
 
 def run_survey_and_stop():
-
     if st.session_state.get("admin_reset_done"):
         st.stop()
 
     survey_data = show_survey()
 
     if survey_data:
+        # join keys anhängen!
+        survey_data["participant_id"] = PID
+        survey_data["session_id"] = SID
+        survey_data["bot_variant"] = BOT_VARIANT
+        survey_data["order"] = ORDER
+        survey_data["step"] = STEP
+        survey_data["survey_ts_utc"] = datetime.utcnow().isoformat()
+
+        # speichern wie bisher
         if os.path.exists(SURVEY_FILE):
             df_old = pd.read_excel(SURVEY_FILE)
             df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
@@ -183,7 +223,17 @@ def run_survey_and_stop():
         df.to_excel(SURVEY_FILE, index=False)
         st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
 
-    st.stop()
+        # Weiterleitung zu Teil 2 (nur wenn step==1 sinnvoll; bei step==2 eher Abschlussseite)
+        if STEP == "1":
+            st.link_button("➡️ Weiter zu Teil 2", get_next_url(PID, ORDER, BOT_VARIANT), use_container_width=True)
+            st.caption("Bitte klicke auf den Button, um zum zweiten Teil zu gelangen.")
+        else:
+            st.success("✅ Studie abgeschlossen. Danke!")
+
+        st.stop()
+
+    # solange Survey noch nicht abgeschickt: nicht stoppen
+    # (show_survey rendert Form)
 
 # Wenn die Verhandlung bereits geschlossen wurde → sofort Fragebogen
 if st.session_state["closed"]:
