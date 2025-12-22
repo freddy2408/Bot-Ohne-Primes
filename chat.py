@@ -19,7 +19,7 @@ def img_to_base64(path):
         data = f.read()
         return base64.b64encode(data).decode()
 
-#
+
 # --------------------------------
 # Session State initialisieren
 # --------------------------------
@@ -38,7 +38,7 @@ if "closed" not in st.session_state:
 if "action" not in st.session_state:
     st.session_state["action"] = None
 
- -----------------------------
+# -----------------------------
 # Participant ID + Order (shared across bots)
 # -----------------------------
 def get_pid() -> str:
