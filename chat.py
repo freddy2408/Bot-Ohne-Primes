@@ -74,16 +74,16 @@ def get_next_url(pid: str, order: str, bot_variant: str) -> str:
 # [NEGOTIATION CONTROL STATE]
 # -----------------------------
 if "repeat_offer_count" not in st.session_state:
-    st.session_state.repeat_offer_count = 0
+    st.session_state["repeat_offer_count"] = 0
 
 if "small_step_count" not in st.session_state:
-    st.session_state.small_step_count = 0
+    st.session_state["small_step_count"] = 0
 
 if "last_user_price" not in st.session_state:
-    st.session_state.last_user_price = None
+    st.session_state["last_user_price"] = None
 
 if "warning_given" not in st.session_state:
-    st.session_state.warning_given = False
+    st.session_state["warning_given"] = False
 
 if "bot_offer" not in st.session_state:
     st.session_state["bot_offer"] = None
@@ -261,8 +261,6 @@ DEFAULT_PARAMS = {
 # -----------------------------
 # [SESSION PARAMS]
 # -----------------------------
-if "sid" not in st.session_state:
-    st.session_state.sid = str(uuid.uuid4())
 if "params" not in st.session_state:
     st.session_state.params = DEFAULT_PARAMS.copy()
 
@@ -286,19 +284,19 @@ def check_abort_conditions(user_text: str, user_price: int | None):
     if user_price is None:
         return "ok", None
 
-    last_price = st.session_state.last_user_price
+    last_price = st.session.state["last_user_price"]
     bot_offer = st.session_state.get("bot_offer")
 
     # 1) Angebot wiederholen
     if last_price == user_price:
-        st.session_state.repeat_offer_count += 1
+        st.session_state["repeat_offer_count"] += 1
     else:
-        st.session_state.repeat_offer_count = 0
+        st.session.state["repeat_offer_count"] = 0
 
-    if st.session_state.repeat_offer_count == 1:
+    if st.session.state["repeat_offer_count"] == 1:
         return "warn", "Dein Angebot ist identisch mit dem vorherigen. " "Bitte schlage einen neuen Preis vor, damit wir weiter verhandeln können."
 
-    if st.session_state.repeat_offer_count >= 2:
+    if st.session.state["repeat_offer_count"] >= 2:
         return "abort", (
             "Da sich dein Angebot erneut nicht verändert hat, "
             "sehe ich aktuell keine Grundlage für eine weitere Verhandlung und beende sie."
@@ -306,8 +304,8 @@ def check_abort_conditions(user_text: str, user_price: int | None):
 
     # 2) Rückschritte
     if last_price and user_price < last_price:
-        if not st.session_state.warning_given:
-            st.session_state.warning_given = True
+        if not st.session.state["warning_given"]:
+            st.session.state["warning_given"] = True
             return "warn", (
                 "Dein neues Angebot liegt unter deinem vorherigen. "
                 "Das erschwert eine konstruktive Verhandlung. "
@@ -326,12 +324,12 @@ def check_abort_conditions(user_text: str, user_price: int | None):
         step = user_price - last_price
 
         if price_gap > 20 and 0 < step < 4:
-            st.session_state.small_step_count += 1
+            st.session.state["small_step_count"] += 1
 
             # wichtig: last_user_price hier updaten
-            st.session_state.last_user_price = user_price
+            st.session.state["last_user_price"] = user_price
 
-            if st.session_state.small_step_count == 1:
+            if st.session.state["small_step_count"] == 1:
                 return "warn", (
                     "Dein Angebot liegt noch deutlich unter meinem Preis, "
                     "und die Erhöhung fällt sehr gering aus. "
@@ -345,9 +343,9 @@ def check_abort_conditions(user_text: str, user_price: int | None):
 
         # Reset nur wenn sinnvoll erhöht oder Abstand klein
         if step >= 4 or price_gap <= 20:
-            st.session_state.small_step_count = 0
+            st.session.state["small_step_count"] = 0
 
-    st.session_state.last_user_price = user_price
+    st.session.state["last_user_price"] = user_price
     return "ok", None
 
 # -----------------------------
