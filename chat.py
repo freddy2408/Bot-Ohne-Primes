@@ -38,6 +38,9 @@ if "closed" not in st.session_state:
 if "action" not in st.session_state:
     st.session_state["action"] = None
 
+if "admin_reset_done" not in st.session_state:
+    st.session_state["admin_reset_done"] = False
+
 # -----------------------------
 # Participant ID + Order (shared across bots)
 # -----------------------------
@@ -284,19 +287,19 @@ def check_abort_conditions(user_text: str, user_price: int | None):
     if user_price is None:
         return "ok", None
 
-    last_price = st.session.state["last_user_price"]
+    last_price = st.session_state["last_user_price"]
     bot_offer = st.session_state.get("bot_offer")
 
     # 1) Angebot wiederholen
     if last_price == user_price:
         st.session_state["repeat_offer_count"] += 1
     else:
-        st.session.state["repeat_offer_count"] = 0
+        st.session_state["repeat_offer_count"] = 0
 
-    if st.session.state["repeat_offer_count"] == 1:
+    if st.session_state["repeat_offer_count"] == 1:
         return "warn", "Dein Angebot ist identisch mit dem vorherigen. " "Bitte schlage einen neuen Preis vor, damit wir weiter verhandeln können."
 
-    if st.session.state["repeat_offer_count"] >= 2:
+    if st.session_state["repeat_offer_count"] >= 2:
         return "abort", (
             "Da sich dein Angebot erneut nicht verändert hat, "
             "sehe ich aktuell keine Grundlage für eine weitere Verhandlung und beende sie."
@@ -304,8 +307,8 @@ def check_abort_conditions(user_text: str, user_price: int | None):
 
     # 2) Rückschritte
     if last_price and user_price < last_price:
-        if not st.session.state["warning_given"]:
-            st.session.state["warning_given"] = True
+        if not st.session_state["warning_given"]:
+            st.session_state["warning_given"] = True
             return "warn", (
                 "Dein neues Angebot liegt unter deinem vorherigen. "
                 "Das erschwert eine konstruktive Verhandlung. "
@@ -324,12 +327,12 @@ def check_abort_conditions(user_text: str, user_price: int | None):
         step = user_price - last_price
 
         if price_gap > 20 and 0 < step < 4:
-            st.session.state["small_step_count"] += 1
+            st.session_state["small_step_count"] += 1
 
             # wichtig: last_user_price hier updaten
-            st.session.state["last_user_price"] = user_price
+            st.session_state["last_user_price"] = user_price
 
-            if st.session.state["small_step_count"] == 1:
+            if st.session_state["small_step_count"] == 1:
                 return "warn", (
                     "Dein Angebot liegt noch deutlich unter meinem Preis, "
                     "und die Erhöhung fällt sehr gering aus. "
@@ -343,9 +346,9 @@ def check_abort_conditions(user_text: str, user_price: int | None):
 
         # Reset nur wenn sinnvoll erhöht oder Abstand klein
         if step >= 4 or price_gap <= 20:
-            st.session.state["small_step_count"] = 0
+            st.session_state["small_step_count"] = 0
 
-    st.session.state["last_user_price"] = user_price
+    st.session_state["last_user_price"] = user_price
     return "ok", None
 
 # -----------------------------
@@ -664,16 +667,21 @@ def generate_reply(history, params: dict) -> str:
         return call_openai([{"role": "system", "content": instruct}] + history)
 
 
-
-
 # -----------------------------
 # [ERGEBNIS-LOGGING (SQLite)]
 # -----------------------------
 DB_PATH = "verhandlungsergebnisse.sqlite3"
 
+def _add_column_if_missing(c, table: str, col: str, coltype: str):
+    cols = [r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()]
+    if col not in cols:
+        c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}")
+
 def _init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+
+    # results
     c.execute("""
         CREATE TABLE IF NOT EXISTS results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -684,6 +692,25 @@ def _init_db():
             msg_count INTEGER
         )
     """)
+    _add_column_if_missing(c, "results", "participant_id", "TEXT")
+    _add_column_if_missing(c, "results", "bot_variant", "TEXT")
+    _add_column_if_missing(c, "results", "order_id", "TEXT")
+    _add_column_if_missing(c, "results", "step", "TEXT")
+
+    # chat_messages (NEU für Friendly)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            role TEXT,
+            text TEXT,
+            ts TEXT,
+            msg_index INTEGER
+        )
+    """)
+    _add_column_if_missing(c, "chat_messages", "participant_id", "TEXT")
+    _add_column_if_missing(c, "chat_messages", "bot_variant", "TEXT")
+
     conn.commit()
     conn.close()
 
@@ -691,18 +718,71 @@ def log_result(session_id: str, deal: bool, price: int | None, msg_count: int):
     _init_db()
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute(
-        "INSERT INTO results (ts, session_id, deal, price, msg_count) VALUES (?, ?, ?, ?, ?)",
-        (datetime.utcnow().isoformat(), session_id, 1 if deal else 0, price, msg_count),
-    )
+    c.execute("""
+        INSERT INTO results (
+            ts, session_id, participant_id, bot_variant, order_id, step,
+            deal, price, msg_count
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        datetime.utcnow().isoformat(),
+        session_id,
+        PID,
+        BOT_VARIANT,
+        ORDER,
+        STEP,
+        1 if deal else 0,
+        price,
+        msg_count
+    ))
     conn.commit()
     conn.close()
+
+def log_chat_message(session_id, role, text, ts, msg_index):
+    _init_db()
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO chat_messages (
+            session_id, participant_id, bot_variant,
+            role, text, ts, msg_index
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        session_id,
+        PID,
+        BOT_VARIANT,
+        role,
+        text,
+        ts,
+        msg_index
+    ))
+    conn.commit()
+    conn.close()
+
+def load_chat_for_session(session_id):
+    _init_db()
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("""
+        SELECT participant_id, bot_variant, role, text, ts
+        FROM chat_messages
+        WHERE session_id = ?
+        ORDER BY msg_index ASC
+    """, conn, params=(session_id,))
+    conn.close()
+    return df
 
 def load_results_df() -> pd.DataFrame:
     _init_db()
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query(
-        "SELECT ts, session_id, deal, price, msg_count FROM results ORDER BY id ASC",
+        """
+        SELECT
+            ts, participant_id, session_id, bot_variant, order_id, step,
+            deal, price, msg_count
+        FROM results
+        ORDER BY id ASC
+        """,
         conn,
     )
     conn.close()
@@ -710,6 +790,7 @@ def load_results_df() -> pd.DataFrame:
         return df
     df["deal"] = df["deal"].map({1: "Deal", 0: "Abgebrochen"})
     return df
+
 
 def extract_price_from_bot(msg: str) -> int | None:
     text = msg.lower()
@@ -777,11 +858,16 @@ if len(st.session_state["history"]) == 0:
         f"mit M5-Chip an. Der Ausgangspreis liegt bei {DEFAULT_PARAMS['list_price']} €. "
         "Was schwebt dir preislich vor?"
     )
+    bot_ts = datetime.now(tz).strftime("%d.%m.%Y %H:%M")
     st.session_state["history"].append({
         "role": "assistant",
-        "text": first_msg,
-        "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
+        "text": bot_text,
+        "ts": bot_ts,
     })
+
+    msg_index = len(st.session_state["history"]) - 1
+    log_chat_message(st.session_state["session_id"], "assistant", bot_text, bot_ts, msg_index)
+
 
 # 2) Eingabefeld
 user_input = st.chat_input(
@@ -963,6 +1049,47 @@ if not st.session_state["closed"]:
 
             df = load_results_df()
 
+            st.markdown("---")
+            st.subheader("💬 Chatverlauf anzeigen")
+
+            if len(df) > 0:
+                selected_session = st.selectbox("Verhandlung auswählen", df["session_id"].unique())
+            else:
+                selected_session = None
+
+            if selected_session:
+                chat_df = load_chat_for_session(selected_session)
+
+                if not chat_df.empty:
+                    st.caption(
+                        f"Participant: `{chat_df['participant_id'].iloc[0]}` | "
+                        f"Bot: `{chat_df['bot_variant'].iloc[0]}`"
+                    )
+
+                BOT_AVATAR  = img_to_base64("bot.png")
+                USER_AVATAR = img_to_base64("user.png")
+
+                st.markdown("### 💬 Chatverlauf")
+
+                for _, row in chat_df.iterrows():
+                    is_user = row["role"] == "user"
+                    avatar_b64 = USER_AVATAR if is_user else BOT_AVATAR
+                    side = "right" if is_user else "left"
+                    klass = "msg-user" if is_user else "msg-bot"
+
+                    st.markdown(f"""
+                    <div class="row {side}">
+                        <img src="data:image/png;base64,{avatar_b64}" class="avatar">
+                        <div class="chat-bubble {klass}">
+                            {row["text"]}
+                        </div>
+                    </div>
+                    <div class="row {side}">
+                        <div class="meta">{row["ts"]}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+
             if len(df) == 0:
                 st.write("Noch keine Ergebnisse gespeichert.")
 
@@ -970,9 +1097,8 @@ if not st.session_state["closed"]:
                 # neue Nummerierung hinzufügen (1, 2, 3, ...)
                 df = df.reset_index(drop=True)
                 df["nr"] = df.index + 1
+                df = df[["nr", "ts", "participant_id", "session_id", "bot_variant", "order_id", "step", "deal", "price", "msg_count"]]
 
-                # schönere Reihenfolge
-                df = df[["nr", "ts", "session_id", "deal", "price", "msg_count"]]
 
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
