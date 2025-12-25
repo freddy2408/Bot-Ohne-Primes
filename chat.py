@@ -597,6 +597,22 @@ def generate_reply(history, params: dict) -> str:
             # reduziere etwas unter das alte Angebot
             return last_bot_offer - random.randint(5, 20)
         return new_price
+    # NIE UNTER USER-ANGEBOT (sonst: Verkäufer wirkt unlogisch)
+    # Sonderfall: Wenn User bereits >= letztem Bot-Angebot ist -> Deal statt Gegenangebot
+    def clamp_counter_vs_user(counter: int, user_price: int):
+        nonlocal last_bot_offer
+
+        # Wenn der User dein letztes Angebot erreicht/überboten hat: nicht unterbieten, sondern akzeptieren
+        if last_bot_offer is not None and user_price >= last_bot_offer:
+            return None  # Signal: Deal
+
+        # Counter darf nicht <= User-Angebot sein (sonst "biete ich weniger als du")
+        if counter <= user_price:
+            # Endgame kleine Schritte, sonst 5er Schritt
+            bump = random.choice([1, 2, 3]) if (last_bot_offer is not None and abs(last_bot_offer - user_price) <= 15) else 5
+            counter = user_price + bump
+
+        return counter
 
 
     # ---------------- PREISZONEN ----------------
@@ -618,6 +634,9 @@ def generate_reply(history, params: dict) -> str:
         raw_price = random.randint(920, 990)
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
+        counter = clamp_counter_vs_user(counter, user_price)
+        if counter is None:
+            pass
 
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
@@ -639,6 +658,9 @@ def generate_reply(history, params: dict) -> str:
 
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
+        counter = clamp_counter_vs_user(counter, user_price)
+        if counter is None:
+            pass
 
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
@@ -658,6 +680,9 @@ def generate_reply(history, params: dict) -> str:
 
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
+        counter = clamp_counter_vs_user(counter, user_price)
+        if counter is None:
+            pass
 
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
