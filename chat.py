@@ -674,7 +674,7 @@ def generate_reply(history, params: dict) -> str:
     if user_price >= 800:
         # je nach Gesprächsphase konservativ starten
         if msg_count < 3:
-            raw_price = user_price + random.randint(30, 80)
+            raw_price = user_price + random.randint(60, 100)
         else:
             raw_price = user_price + random.randint(15, 40)
 
@@ -815,6 +815,35 @@ def load_results_df() -> pd.DataFrame:
         return df
     df["deal"] = df["deal"].map({1: "Deal", 0: "Abgebrochen"})
     return df
+
+
+    def export_all_chats_to_txt() -> str:
+    _init_db()
+    conn = sqlite3.connect(DB_PATH)
+
+    df = pd.read_sql_query("""
+        SELECT session_id, role, text, ts
+        FROM chat_messages
+        ORDER BY session_id, msg_index ASC
+    """, conn)
+
+    conn.close()
+
+    if df.empty:
+        return "Keine Chatverläufe vorhanden."
+
+    output = []
+    for session_id, group in df.groupby("session_id"):
+        output.append(f"Session-ID: {session_id}")
+        output.append("-" * 50)
+
+        for _, row in group.iterrows():
+            role = "USER" if row["role"] == "user" else "BOT"
+            output.append(f"[{row['ts']}] {role}: {row['text']}")
+
+        output.append("\n" + "=" * 60 + "\n")
+
+    return "\n".join(output)
 
 
 def extract_price_from_bot(msg: str) -> int | None:
@@ -974,6 +1003,16 @@ if user_input and not st.session_state["closed"]:
         "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
     })
 
+    bot_ts = datetime.now(tz).strftime("%d.%m.%Y %H:%M")
+    msg_index = len(st.session_state["history"]) - 1
+    log_chat_message(
+        st.session_state["session_id"],
+        "assistant",
+        bot_text,
+        bot_ts,
+        msg_index
+    )
+
     # Bot-Angebot extrahieren & speichern (wichtig für price_gap Logik!)
     new_offer = extract_price_from_bot(bot_text)
     if new_offer is not None:
@@ -1119,6 +1158,23 @@ if pwd_ok:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
+
+        
+        # =============================
+        # 📥 CHAT-EXPORT (NEU)
+        # =============================
+        st.markdown("### 📥 Chat-Export")
+
+        chat_txt = export_all_chats_to_txt()
+
+        st.download_button(
+            label="📄 Alle Chats als TXT herunterladen",
+            data=chat_txt,
+            file_name="alle_chatverlaeufe.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+            
         # -----------------------------
         # Session-Auswahl für Chat
         # -----------------------------
