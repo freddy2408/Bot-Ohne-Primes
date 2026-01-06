@@ -817,7 +817,7 @@ def load_results_df() -> pd.DataFrame:
     return df
 
 
-    def export_all_chats_to_txt() -> str:
+def export_all_chats_to_txt() -> str:
     _init_db()
     conn = sqlite3.connect(DB_PATH)
 
