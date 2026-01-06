@@ -618,37 +618,6 @@ def generate_reply(history, params: dict) -> str:
     LIST = params["list_price"]
     MIN  = params["min_price"]
 
-    # ---------------------------------------------------
-    # 2) PREISLOGIK – realistische Händlerlogik mit 5er-Rundung, krummen Endpreisen
-    # ---------------------------------------------------
-
-    # USERPREIS EXTRAHIEREN
-    last_user_msg = ""
-    for m in reversed(history):
-        if m["role"] == "user":
-            last_user_msg = m["content"]
-            break
-
-    nums = re.findall(r"\d{2,5}", last_user_msg)
-    user_price = int(nums[0]) if nums else None
-
-    if user_price is None:
-        return raw_llm_reply
-
-    # BOT-LETZTES GEGENANGEBOT FINDEN
-    last_bot_offer = None
-    for m in reversed(history):
-        if m["role"] == "assistant":
-            matches = re.findall(r"\d{2,5}", m["content"])
-            if matches:
-                last_bot_offer = int(matches[-1])
-            break
-
-    # Nachrichtenzahl (steuert Annäherungstempo)
-    msg_count = sum(1 for m in history if m["role"] == "assistant")
-
-
-
     # ---- PREISZONEN V3 (alte Zahlen, neue Dynamik) ----------------
 
     # A) USER < 600 → ablehnen ohne Gegenangebot
@@ -731,17 +700,15 @@ def generate_reply(history, params: dict) -> str:
     # -----------------------------
     # DYNAMISCHE WEITERVERHANDLUNG
     # -----------------------------
-
     # Bot darf NIE über seinen letzten Preis steigen
     base = last_bot_offer
 
-    # Erlaubte flexible Nachgabelogik
-    step = concession_step()
-    new_price = base - step
+    # Falls aus irgendeinem Grund kein letzter Bot-Preis existiert → fallback
+    if base is None:
+        base = LIST
 
-    # Niemals unter Mindestpreis fallen
-    if new_price < MIN:
-        new_price = MIN
+    # concession_step gibt bereits den "neuen Preis" zurück
+    new_price = concession_step(base, MIN)
 
     # Kleine „menschliche“ Rauschentropfen:
     if random.random() < 0.4:
@@ -759,6 +726,7 @@ def generate_reply(history, params: dict) -> str:
     )
 
     return call_openai([sys_msg, {"role": "user", "content": instruct}] + history)
+
 
 # -----------------------------
 # [ERGEBNIS-LOGGING (SQLite)]
