@@ -18,7 +18,7 @@ def show_survey():
     # ---------------------------
     # 2. Geschlecht – keine Vorauswahl
     # ---------------------------
-    st.write("2. Mit welchem Geschlecht identifizieren Sie sich?")
+    st.write("2. Was ist Ihr Geschlecht?")
 
     gender = st.radio(
         "",
