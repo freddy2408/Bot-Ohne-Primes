@@ -613,8 +613,7 @@ def generate_reply(history, params: dict) -> str:
             last_user_msg = m["content"]
             break
 
-    user_price = extract_user_offer(user_input)
-    decision, msg = check_abort_conditions(user_input, user_price)
+    user_price = extract_user_offer(last_user_msg)
 
     if user_price is None:
         return raw_llm_reply
@@ -1059,9 +1058,10 @@ if user_input and not st.session_state["closed"]:
     ]
 
     # Nutzerpreis extrahieren
-    user_price = extract_user_offer(last_user_msg)
+    user_price = extract_user_offer(user_input)
 
     decision, msg = check_abort_conditions(user_input, user_price)
+
 
     if decision == "abort":
         st.session_state["closed"] = True
