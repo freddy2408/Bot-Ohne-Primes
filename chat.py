@@ -950,7 +950,8 @@ def extract_price_from_bot(msg: str) -> int | None:
     OFFER_HINTS = [
         "mein gegenangebot", "mein angebot", "ich biete", "ich kann", "ich würde",
         "ich würde dir", "ich könnte", "würde dir anbieten", "preis wäre", "für",
-        "machen wir", "deal bei", "einverstanden bei", "ich komme dir entgegen"
+        "machen wir", "deal bei", "einverstanden bei", "ich komme dir entgegen",
+        "ich bin bereit", "bereit", "anzubieten", "zu diesem preis", "deal festmachen"
     ]
 
     if not any(h in t for h in OFFER_HINTS):
