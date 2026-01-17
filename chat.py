@@ -301,6 +301,52 @@ def extract_user_offer(text: str) -> int | None:
 
     t = text.strip().lower()
 
+    # 1) Reine Zahl / Zahl mit € / eur / euro => sehr wahrscheinlich Angebot
+    m_plain = re.match(r"^\s*(\d{2,5})\s*(€|eur|euro)?\s*[!?.,]?\s*$", t)
+    if m_plain:
+        val = int(m_plain.group(1))
+        if 100 <= val <= 5000:
+            return val
+
+    # 2) "X ist mir zu viel/zu teuer" => KEIN Angebot (nur wenn Kontext zur Zahl)
+    too_much_patterns = [
+        r"\b(\d{2,5})\b.*\b(zu viel|zu teuer|zu hoch|ist mir zu viel|ist mir zu teuer)\b",
+        r"\b(zu viel|zu teuer|zu hoch|ist mir zu viel|ist mir zu teuer)\b.*\b(\d{2,5})\b",
+    ]
+    for pat in too_much_patterns:
+        if re.search(pat, t):
+            return None
+
+    # 3) Euro/Intent prüfen (für normale Sätze)
+    has_euro_hint = ("€" in t) or (" eur" in t) or (" euro" in t)
+    has_offer_intent = any(k in t for k in OFFER_KEYWORDS)
+
+    # Wenn weder Euro-Hinweis noch Angebots-Intent: keine Zahl als Angebot werten
+    if not (has_euro_hint or has_offer_intent):
+        return None
+
+    # 4) Kandidaten sammeln und Spezifikationen rausfiltern
+    candidates = []
+    for m in PRICE_TOKEN_RE.finditer(text):
+        val = int(m.group(1))
+
+        # plausible Preisspanne
+        if not (100 <= val <= 5000):
+            continue
+
+        # Direkt danach Einheiten? (GB, Zoll, Gen, M5, ...)
+        after = text[m.end(): m.end() + 12]
+        if UNIT_WORDS_AFTER_NUMBER.search(after):
+            continue
+
+        # typische Specs ausschließen
+        if val in (13, 32, 64, 128, 256, 512, 1024, 2048):
+            continue
+
+        candidates.append(val)
+
+    return candidates[-1] if candidates else None
+
 # -----------------------------
 # ABBRECHEN DER VERHANDLUNG
 # -----------------------------
@@ -567,7 +613,8 @@ def generate_reply(history, params: dict) -> str:
             last_user_msg = m["content"]
             break
 
-    user_price = extract_user_offer(last_user_msg)
+    user_price = extract_user_offer(user_input)
+    decision, msg = check_abort_conditions(user_input, user_price)
 
     if user_price is None:
         return raw_llm_reply
