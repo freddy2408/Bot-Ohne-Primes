@@ -491,6 +491,10 @@ def generate_reply(history, params: dict) -> str:
     if not isinstance(raw_llm_reply, str):
         raw_llm_reply = "Es gab einen kleinen technischen Fehler. Bitte frage nochmal. 😊"
 
+    last_user_msg = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
+    user_price = extract_user_offer(last_user_msg)
+
+
     # ---------------------------------------------------
     # REGELPRÜFUNG
     # ---------------------------------------------------
@@ -979,11 +983,8 @@ if user_input and not st.session_state["closed"]:
     ]
 
     # Nutzerpreis extrahieren
-    # Nutzerpreis extrahieren (sicher, kein Crash bei None)
-    user_price = None
-    if user_input:
-        nums = re.findall(r"\d{2,5}", user_input)
-        user_price = int(nums[0]) if nums else None
+    user_price = extract_user_offer(user_input)
+
 
     decision, msg = check_abort_conditions(user_input, user_price)
 
@@ -1010,6 +1011,7 @@ if user_input and not st.session_state["closed"]:
             ended_via="abort_rule"
         )
         run_survey_and_stop()
+        st.stop()
 
     elif decision == "warn":
         bot_text = msg
