@@ -536,9 +536,10 @@ def generate_reply(history, params: dict) -> str:
         if m["role"] == "user":
             last_user_msg = m["content"]
             break
+        
+    # Nutzerpreis extrahieren
+    user_price = extract_user_offer(user_input)
 
-    nums = re.findall(r"\d{2,5}", last_user_msg)
-    user_price = int(nums[0]) if nums else None
 
     if user_price is None:
         return raw_llm_reply
@@ -981,9 +982,6 @@ if user_input and not st.session_state["closed"]:
         {"role": m["role"], "content": m["text"]}
         for m in st.session_state["history"]
     ]
-
-    # Nutzerpreis extrahieren
-    user_price = extract_user_offer(user_input)
 
 
     decision, msg = check_abort_conditions(user_input, user_price)
