@@ -940,44 +940,50 @@ def export_all_chats_to_txt() -> str:
 
 
 def extract_price_from_bot(msg: str) -> int | None:
-    text = msg.lower()
+    t = (msg or "").lower()
 
-    # 0) Wenn eine Zahl direkt vor "gb" steht → nie ein Preis
-    gb_numbers = re.findall(r"(\d{2,5})\s*gb", text)
+    # Zahlen, die sehr wahrscheinlich Specs sind
+    gb_numbers = re.findall(r"(\d{2,5})\s*gb", t)
     gb_numbers = {int(x) for x in gb_numbers}
 
-    # 1) Explizite Euro-Angaben ("920 €" oder "920€")
-    euro_matches = re.findall(r"(\d{2,5})\s*€", text)
+    # ✅ Nur als Angebot zählen, wenn klare Angebots-Wörter vorkommen
+    OFFER_HINTS = [
+        "mein gegenangebot", "mein angebot", "ich biete", "ich kann", "ich würde",
+        "ich würde dir", "ich könnte", "würde dir anbieten", "preis wäre", "für",
+        "machen wir", "deal bei", "einverstanden bei", "ich komme dir entgegen"
+    ]
+
+    if not any(h in t for h in OFFER_HINTS):
+        return None
+
+    # 1) "920 €" / "920€"
+    euro_matches = re.findall(r"(\d{2,5})\s*€", t)
     for m in euro_matches[::-1]:
         val = int(m)
         if val not in gb_numbers and 600 <= val <= 2000:
             return val
 
-    # 2) Preisangaben mit Worten (für 900 / Preis wäre 880 / Gegenangebot 910)
+    # 2) Keyword-nahe Zahl: "gegenangebot 910", "preis wäre 880", "ich biete 900"
     word_matches = re.findall(
-        r"(?:preis|für|gegenangebot|angebot)\s*:?[^0-9]*(\d{2,5})",
-        text
+        r"(?:gegenangebot|angebot|preis|für|deal bei|einverstanden bei)\s*:?[^0-9]*(\d{2,5})",
+        t
     )
     for m in word_matches[::-1]:
         val = int(m)
         if val not in gb_numbers and 600 <= val <= 2000:
             return val
 
-    # 3) Alle sonstigen Zahlen prüfen (Backup), aber GB ausschließen!
-    all_nums = [int(x) for x in re.findall(r"\d{2,5}", text)]
-
-    for n in all_nums:
+    # 3) Fallback: letzte plausible Zahl (aber nur wenn OFFER_HINTS oben aktiv)
+    all_nums = [int(x) for x in re.findall(r"\d{2,5}", t)]
+    for n in all_nums[::-1]:
         if n in gb_numbers:
             continue
-        if n in (32, 64, 128, 256, 512, 1024, 2048):
+        if n in (13, 32, 64, 128, 256, 512, 1024, 2048):
             continue
         if 600 <= n <= 2000:
             return n
 
     return None
-
-
-
 
 
 # -----------------------------
