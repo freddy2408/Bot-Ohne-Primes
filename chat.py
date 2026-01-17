@@ -268,6 +268,40 @@ if "params" not in st.session_state:
     st.session_state.params = DEFAULT_PARAMS.copy()
 
 # -----------------------------
+# USER-OFFER EXTRAKTION
+# -----------------------------
+PRICE_TOKEN_RE = re.compile(r"(?<!\d)(\d{2,5})(?!\d)")
+
+DISQUALIFY_CONTEXT = [
+    "zu viel", "zu teuer", "nicht", "kein", "niemals", "kostet", "kosten", "preislich zu hoch",
+    "würde ich nicht", "geht nicht", "unmöglich", "zu hoch", "zu viel", "zu teuer", "preislich zu hoch", "zu hoch",
+    "ist mir zu viel", "ist mir zu teuer"
+]
+
+OFFER_KEYWORDS = [
+    "ich biete", "biete", "mein angebot", "angebot", "zahle", "ich zahle", "würde geben",
+    "ich würde geben", "kann geben", "gebe", "für", "bei", "preis wäre", "mein preis", "ich biete", "mein angebot", "angebot", "ich zahle", "zahle", "würde geben", "ich würde geben", "kann geben", "gebe",
+    "mein preis", "preis wäre"
+]
+
+UNIT_WORDS_AFTER_NUMBER = re.compile(
+    r"^\s*(gb|tb|zoll|inch|hz|gen|generation|chip|m\d+)\b|^\s*['\"]",  # "13" oder 13"
+    re.IGNORECASE
+)
+
+def extract_user_offer(text: str) -> int | None:
+    """
+    Extrahiert einen Preis nur dann, wenn es sehr wahrscheinlich ein echtes Angebot ist.
+    - Akzeptiert auch reine Zahlennachrichten wie "850" oder "850€"
+    - Ignoriert Spezifikationen (GB/Zoll/Gen/M-Chip etc.)
+    - Blockt "X ist mir zu viel/zu teuer" gezielt (nur wenn es sich auf die Zahl bezieht)
+    """
+    if not text:
+        return None
+
+    t = text.strip().lower()
+
+# -----------------------------
 # ABBRECHEN DER VERHANDLUNG
 # -----------------------------
 INSULT_PATTERNS = [
@@ -491,10 +525,6 @@ def generate_reply(history, params: dict) -> str:
     if not isinstance(raw_llm_reply, str):
         raw_llm_reply = "Es gab einen kleinen technischen Fehler. Bitte frage nochmal. 😊"
 
-    last_user_msg = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
-    user_price = extract_user_offer(last_user_msg)
-
-
     # ---------------------------------------------------
     # REGELPRÜFUNG
     # ---------------------------------------------------
@@ -536,10 +566,8 @@ def generate_reply(history, params: dict) -> str:
         if m["role"] == "user":
             last_user_msg = m["content"]
             break
-        
-    # Nutzerpreis extrahieren
-    user_price = extract_user_offer(user_input)
 
+    user_price = extract_user_offer(last_user_msg)
 
     if user_price is None:
         return raw_llm_reply
@@ -983,6 +1011,8 @@ if user_input and not st.session_state["closed"]:
         for m in st.session_state["history"]
     ]
 
+    # Nutzerpreis extrahieren
+    user_price = extract_user_offer(last_user_msg)
 
     decision, msg = check_abort_conditions(user_input, user_price)
 
