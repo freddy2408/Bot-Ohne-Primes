@@ -229,7 +229,7 @@ def run_survey_and_stop():
 
         # ✅ zum Testen immer Button zeigen
         st.link_button("➡️ Weiter zu Verhandlung 2", get_next_url(PID, ORDER, BOT_VARIANT), use_container_width=True)
-        st.caption("Bitte klicken Sie auf den Button, um zum zweiten Teil zu gelangen.")
+        st.caption("Bitte klicken Sie auf den Button, um zur zweiten Verhandlung zu gelangen.")
 
         st.stop()
     # solange Survey noch nicht abgeschickt: nicht stoppen
