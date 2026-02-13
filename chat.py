@@ -461,7 +461,6 @@ WICHTIGE REGELN FÜR DIE VERHANDLUNG:
 2. Du erwähnst NIEMALS deine Untergrenze und sagst nie Sätze wie - "800 € ist das Minimum" - "Unter 800 € geht nicht" - oder konkrete interne Grenzen.
 3. Alle Antworten sind frei formulierte KI-Antworten, niemals Textbausteine.
 4. Du bleibst freundlich, sachlich und verhandelst realistisch.
-5. Du darfst niemals **eigenständig Preise erfinden oder raten**.  - Du darfst **nur Preise verwenden**, die explizit von der Software bereitgestellt werden.
 
 Zusatzregeln: - Keine Macht-, Druck- oder Knappheitsstrategien. - Maximal {params['max_sentences']} Sätze.
 """
@@ -591,7 +590,17 @@ def generate_reply(history, params: dict) -> str:
     user_price = extract_user_offer(last_user_msg)
 
     if user_price is None:
+        # HARTE REGEL: Wenn User keinen Preis nennt, darf Bot keinen Preis nennen.
+        if re.search(r"\d{2,5}", raw_llm_reply) or "€" in raw_llm_reply:
+            instruct = (
+                "Der Nutzer hat keinen Preis als Zahl genannt. "
+                "Antworte freundlich, aber nenne KEINEN Preis und KEINE Zahlen. "
+                "Bitte den Nutzer, ein konkretes Angebot in Euro als Zahl zu nennen."
+            )
+            return call_openai([{"role": "system", "content": instruct}] + history)
+
         return raw_llm_reply
+
 
     # BOT-LETZTES GEGENANGEBOT FINDEN
     last_bot_offer = None
