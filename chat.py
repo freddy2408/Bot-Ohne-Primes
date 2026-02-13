@@ -590,13 +590,11 @@ def generate_reply(history, params: dict) -> str:
     user_price = extract_user_offer(last_user_msg)
 
     if user_price is None:
-        # HARTE REGEL: Wenn User keinen Preis nennt, darf Bot keinen Preis nennen.
-        if re.search(r"\d{2,5}", raw_llm_reply) or "€" in raw_llm_reply:
-            instruct = (
-                "Der Nutzer hat keinen Preis als Zahl genannt. "
-                "Antworte freundlich, aber nenne KEINEN Preis und KEINE Zahlen. "
-                "Bitte den Nutzer, ein konkretes Angebot in Euro als Zahl zu nennen."
-            )
+        instruct = (
+            "Der Nutzer hat kein konkretes Preisangebot als Zahl gemacht. "
+            "Antworte freundlich und kurz und frage nach einem konkreten Angebot in Euro. "
+            "WICHTIG: Nenne KEINE Zahlen (keine Ziffern) und kein €-Zeichen."
+        )
             return call_openai([{"role": "system", "content": instruct}] + history)
 
         return raw_llm_reply
