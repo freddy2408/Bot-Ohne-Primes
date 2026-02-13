@@ -463,12 +463,6 @@ WICHTIGE REGELN FÜR DIE VERHANDLUNG:
 4. Du bleibst freundlich, sachlich und verhandelst realistisch.
 5. Wenn der Nutzer kein Angebot in Form einer Zahl abgibt, gibst du kein Gegenangebot ab, bzw. geht nicht preislich auf den Nutzer ein. Bitte ihn dann höflich ein Angebot von seiner Preisvorstellung zu formulieren
 
-PREISLOGIK:
-- Nutzer < 600 € → höflich ablehnen (zu niedrig für neues Gerät), um realistischere Angebote bitten. → KEIN Gegenangebot.
-- Nutzer 600–700 € → höflich ablehnen (immer noch zu wenig). → Gegenangebot HOCH ansetzen (940–990 €). → Du verhältst dich verkaufsorientiert.
-- Nutzer 700–800 € → als Annäherung anerkennen. → Gegenangebot realistisch (880–950 €). → Du bleibst aber verkaufsorientiert.
-- Nutzer ≥ 800 € → noch NICHT sofort akzeptieren. → leicht höheres Gegenangebot (z. B. +20 bis +60 €). → erst nach mehreren Nachrichten kann akzeptiert werden.
-
 Zusatzregeln: - Keine Macht-, Druck- oder Knappheitsstrategien. - Maximal {params['max_sentences']} Sätze.
 """
 
