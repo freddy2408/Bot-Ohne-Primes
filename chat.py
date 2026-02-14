@@ -697,9 +697,11 @@ def generate_reply(history, params: dict) -> str:
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
         counter = clamp_counter_vs_user(counter, user_price)
-        st.session_state["bot_offer"] = int(counter)
-        if counter is None:
-            pass
+        if isinstance(counter, int):
+            st.session_state["bot_offer"] = counter
+        else:
+            st.session_state["bot_offer"] = None
+
 
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
@@ -722,9 +724,10 @@ def generate_reply(history, params: dict) -> str:
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
         counter = clamp_counter_vs_user(counter, user_price)
-        st.session_state["bot_offer"] = int(counter)
-        if counter is None:
-            pass
+        if isinstance(counter, int):
+            st.session_state["bot_offer"] = counter
+        else:
+            st.session_state["bot_offer"] = None
 
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
@@ -745,9 +748,11 @@ def generate_reply(history, params: dict) -> str:
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
         counter = clamp_counter_vs_user(counter, user_price)
-        st.session_state["bot_offer"] = int(counter)
-        if counter is None:
-            pass
+        if isinstance(counter, int):
+            st.session_state["bot_offer"] = counter
+        else:
+            st.session_state["bot_offer"] = None
+
 
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
@@ -1104,9 +1109,10 @@ if user_input and not st.session_state["closed"]:
         msg_index
     )
 
-    # Bot-Angebot extrahieren & speichern (wichtig für price_gap Logik!)
-    new_offer = extract_price_from_bot(bot_text)
-    st.session_state["bot_offer"] = new_offer  # setzt auch None sauber
+    # bot_offer wird deterministisch in generate_reply() gesetzt.
+    # Hier NICHT nochmal aus Bot-Text extrahieren, sonst überschreiben wir ihn.
+    pass
+
 
 
 # 4) Chat-Verlauf anzeigen (inkl. frischer Bot-Antwort) 
