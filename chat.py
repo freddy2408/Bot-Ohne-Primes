@@ -12,13 +12,13 @@ import sqlite3
 import base64
 import pytz
 
-#---
-
+# --------------------------------
+# Helper
+# --------------------------------
 def img_to_base64(path):
     with open(path, "rb") as f:
         data = f.read()
         return base64.b64encode(data).decode()
-
 
 # --------------------------------
 # Session State initialisieren
@@ -30,10 +30,10 @@ if "history" not in st.session_state:
     st.session_state["history"] = []  # Chat-Verlauf als Liste von Dicts
 
 if "agreed_price" not in st.session_state:
-    st.session_state["agreed_price"] = None  # Preis, der per Deal-Button bestätigt werden kann
+    st.session_state["agreed_price"] = None
 
 if "closed" not in st.session_state:
-    st.session_state["closed"] = False  # Ob die Verhandlung abgeschlossen ist
+    st.session_state["closed"] = False
 
 if "action" not in st.session_state:
     st.session_state["action"] = None
@@ -62,12 +62,10 @@ BOT_VARIANT = "friendly"
 PID = st.session_state["participant_id"]
 SID = st.session_state["session_id"]
 
-
 BOT_A_URL = "https://verhandlung123.streamlit.app"
 BOT_B_URL = "https://verhandlung.streamlit.app"
 
 def get_next_url(pid: str, order: str, bot_variant: str) -> str:
-    # bot_variant: "power" = Bot A, "friendly" = Bot B
     if bot_variant == "power":
         return f"{BOT_B_URL}?pid={pid}&order={order}&step=2"
     else:
@@ -96,19 +94,10 @@ if "bot_offer" not in st.session_state:
 # -----------------------------
 st.set_page_config(page_title="iPad-Verhandlung – Kontrollbedingung", page_icon="💬")
 
-# Bild laden (z. B. ipad.png im Projektordner)
 ipad_b64 = img_to_base64("ipad.png")
 
 st.markdown(f"""
 <style>
-
-#-------Hintergrung Farbe ausgeblendet------
-#   .stApp {{
-#      max-width: 900px;
-#        margin: 0 auto;
-#        background: linear-gradient(to bottom, #f8f8f8, #e9e9e9);
-#    }}
-
 .header-flex {{
     display: flex;
     align-items: center;
@@ -138,7 +127,6 @@ st.markdown(f"""
 
 st.caption("Deine Rolle: Käufer")
 
-
 CHAT_CSS = """
 <style>
 .chat-container {
@@ -164,13 +152,13 @@ CHAT_CSS = """
 }
 
 .msg-user {
-    background: #23A455;       /* User = Kleinanzeigen-Grün */
+    background: #23A455;
     color: white;
     border-top-right-radius: 4px;
 }
 
 .msg-bot {
-    background: #F1F1F1;       /* Bot = hellgrau */
+    background: #F1F1F1;
     color: #222;
     border-top-left-radius: 4px;
 }
@@ -189,13 +177,12 @@ CHAT_CSS = """
     color: #7A7A7A;
     margin-top: 2px;
 }
-
 </style>
 """
-
 st.markdown(CHAT_CSS, unsafe_allow_html=True)
 
 SURVEY_FILE = "survey_results.xlsx"
+
 # ----------------------------
 # Fragebogen (nur nach Abschluss)
 # ----------------------------
@@ -207,9 +194,7 @@ def run_survey_and_stop():
 
     survey_data = show_survey()
 
-    # ✅ wichtig: nicht "if survey_data", sondern dict-check
     if isinstance(survey_data, dict):
-        # join keys anhängen
         survey_data["participant_id"] = PID
         survey_data["session_id"] = SID
         survey_data["bot_variant"] = BOT_VARIANT
@@ -217,7 +202,6 @@ def run_survey_and_stop():
         survey_data["step"] = STEP
         survey_data["survey_ts_utc"] = datetime.utcnow().isoformat()
 
-        # speichern
         if os.path.exists(SURVEY_FILE):
             df_old = pd.read_excel(SURVEY_FILE)
             df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
@@ -227,19 +211,13 @@ def run_survey_and_stop():
         df.to_excel(SURVEY_FILE, index=False)
         st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
 
-        # ✅ zum Testen immer Button zeigen
         st.link_button("➡️ Weiter zu Verhandlung 2", get_next_url(PID, ORDER, BOT_VARIANT), use_container_width=True)
         st.caption("Bitte klicken Sie auf den Button, um zur zweiten Verhandlung zu gelangen.")
 
         st.stop()
-    # solange Survey noch nicht abgeschickt: nicht stoppen
-    # (show_survey rendert Form)
 
-# Wenn die Verhandlung bereits geschlossen wurde → sofort Fragebogen
 if st.session_state["closed"]:
     run_survey_and_stop()
-
-
 
 # -----------------------------
 # [SECRETS & MODELL]
@@ -248,22 +226,17 @@ API_KEY = st.secrets["OPENAI_API_KEY"]
 MODEL  = st.secrets.get("OPENAI_MODEL", "gpt-4o-mini")
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
 
-
-
 # -----------------------------
 # [EXPERIMENTSPARAMETER – defaults]
 # -----------------------------
 DEFAULT_PARAMS = {
     "scenario_text": "Sie verhandeln über ein iPad Pro (neu, 13 Zoll, M5 Chip, 256 GB, Space Grey) inklusive Apple Pencil (2. Gen).",
-    "list_price": 1000,          # Ausgangspreis
-    "min_price": 800,            # Untergrenze
+    "list_price": 1000,
+    "min_price": 800,
     "tone": "freundlich, respektvoll, auf Augenhöhe, sachlich",
-    "max_sentences": 4,          # KI-Antwortlänge in Sätzen
+    "max_sentences": 4,
 }
 
-# -----------------------------
-# [SESSION PARAMS]
-# -----------------------------
 if "params" not in st.session_state:
     st.session_state.params = DEFAULT_PARAMS.copy()
 
@@ -272,44 +245,30 @@ if "params" not in st.session_state:
 # -----------------------------
 PRICE_TOKEN_RE = re.compile(r"(?<!\d)(\d{2,5})(?!\d)")
 
-DISQUALIFY_CONTEXT = [
-    "zu viel", "zu teuer", "nicht", "kein", "niemals", "kostet", "kosten", "preislich zu hoch",
-    "würde ich nicht", "geht nicht", "unmöglich", "zu hoch", "zu viel", "zu teuer", "preislich zu hoch", "zu hoch",
-    "ist mir zu viel", "ist mir zu teuer"
-    "vielleicht", "wie sind", "wie wäre", "was ist mit", "gehen wir", "kannst du", "würde", "okay", "ok", "vb", "verhandlungsbasis"
-]
-
-OFFER_KEYWORDS = [
-    "ich biete", "biete", "mein angebot", "angebot", "zahle", "ich zahle", "würde geben",
-    "ich würde geben", "kann geben", "gebe", "für", "bei", "preis wäre", "mein preis", "ich biete", "mein angebot", "angebot", "ich zahle", "zahle", "würde geben", "ich würde geben", "kann geben", "gebe",
-    "mein preis", "preis wäre"
-]
-
 UNIT_WORDS_AFTER_NUMBER = re.compile(
-    r"^\s*(gb|tb|zoll|inch|hz|gen|generation|chip|m\d+)\b|^\s*['\"]",  # "13" oder 13"
+    r"^\s*(gb|tb|zoll|inch|hz|gen|generation|chip|m\d+)\b|^\s*['\"]",
     re.IGNORECASE
 )
 
-def extract_user_offer(text: str) -> int | None:
-    """
-    Extrahiert einen Preis nur dann, wenn es sehr wahrscheinlich ein echtes Angebot ist.
-    - Akzeptiert auch reine Zahlennachrichten wie "850" oder "850€"
-    - Ignoriert Spezifikationen (GB/Zoll/Gen/M-Chip etc.)
-    - Blockt "X ist mir zu viel/zu teuer" gezielt (nur wenn es sich auf die Zahl bezieht)
-    """
+OFFER_KEYWORDS = [
+    "ich biete", "biete", "mein angebot", "angebot", "zahle", "ich zahle", "würde geben",
+    "ich würde geben", "kann geben", "gebe", "preis wäre", "mein preis"
+]
+
+def extract_user_offer(text: str):
     if not text:
         return None
 
     t = text.strip().lower()
 
-    # 1) Reine Zahl / Zahl mit € / eur / euro => sehr wahrscheinlich Angebot
+    # reine Zahl / Zahl mit €
     m_plain = re.match(r"^\s*(\d{2,5})\s*(€|eur|euro)?\s*[!?.,]?\s*$", t)
     if m_plain:
         val = int(m_plain.group(1))
         if 100 <= val <= 5000:
             return val
 
-    # 2) "X ist mir zu viel/zu teuer" => KEIN Angebot (nur wenn Kontext zur Zahl)
+    # "X ist mir zu teuer" -> kein Angebot
     too_much_patterns = [
         r"\b(\d{2,5})\b.*\b(zu viel|zu teuer|zu hoch|ist mir zu viel|ist mir zu teuer)\b",
         r"\b(zu viel|zu teuer|zu hoch|ist mir zu viel|ist mir zu teuer)\b.*\b(\d{2,5})\b",
@@ -318,29 +277,22 @@ def extract_user_offer(text: str) -> int | None:
         if re.search(pat, t):
             return None
 
-    # 3) Euro/Intent prüfen (für normale Sätze)
     has_euro_hint = ("€" in t) or (" eur" in t) or (" euro" in t)
     has_offer_intent = any(k in t for k in OFFER_KEYWORDS)
 
-    # Wenn weder Euro-Hinweis noch Angebots-Intent: keine Zahl als Angebot werten
     if not (has_euro_hint or has_offer_intent):
         return None
 
-    # 4) Kandidaten sammeln und Spezifikationen rausfiltern
     candidates = []
     for m in PRICE_TOKEN_RE.finditer(text):
         val = int(m.group(1))
-
-        # plausible Preisspanne
         if not (100 <= val <= 5000):
             continue
 
-        # Direkt danach Einheiten? (GB, Zoll, Gen, M5, ...)
         after = text[m.end(): m.end() + 12]
         if UNIT_WORDS_AFTER_NUMBER.search(after):
             continue
 
-        # typische Specs ausschließen
         if val in (13, 32, 64, 128, 256, 512, 1024, 2048):
             continue
 
@@ -371,14 +323,17 @@ def check_abort_conditions(user_text: str, user_price: int | None):
     last_price = st.session_state["last_user_price"]
     bot_offer = st.session_state.get("bot_offer")
 
-    # 1) Angebot wiederholen
+    # Angebot wiederholen
     if last_price == user_price:
         st.session_state["repeat_offer_count"] += 1
     else:
         st.session_state["repeat_offer_count"] = 0
 
     if st.session_state["repeat_offer_count"] == 1:
-        return "warn", "Dein Angebot ist identisch mit dem vorherigen. " "Bitte schlage einen neuen Preis vor, damit wir weiter verhandeln können."
+        return "warn", (
+            "Dein Angebot ist identisch mit dem vorherigen. "
+            "Bitte schlage einen neuen Preis vor, damit wir weiter verhandeln können."
+        )
 
     if st.session_state["repeat_offer_count"] >= 2:
         return "abort", (
@@ -386,7 +341,7 @@ def check_abort_conditions(user_text: str, user_price: int | None):
             "sehe ich aktuell keine Grundlage für eine weitere Verhandlung und beende sie."
         )
 
-    # 2) Rückschritte
+    # Rückschritte
     if last_price and user_price < last_price:
         if not st.session_state["warning_given"]:
             st.session_state["warning_given"] = True
@@ -398,19 +353,15 @@ def check_abort_conditions(user_text: str, user_price: int | None):
         return "abort", (
             "Da der Preis erneut gesunken ist, "
             "beende ich die Verhandlung an dieser Stelle."
-
         )
 
-    # 3) Mini-Erhöhungen trotz großer Distanz
+    # Mini-Erhöhungen trotz großer Distanz
     if bot_offer and last_price is not None:
-
         price_gap = bot_offer - user_price
         step = user_price - last_price
 
         if price_gap > 20 and 0 < step < 4:
             st.session_state["small_step_count"] += 1
-
-            # wichtig: last_user_price hier updaten
             st.session_state["last_user_price"] = user_price
 
             if st.session_state["small_step_count"] == 1:
@@ -425,7 +376,6 @@ def check_abort_conditions(user_text: str, user_price: int | None):
                 "beende ich die Verhandlung an dieser Stelle."
             )
 
-        # Reset nur wenn sinnvoll erhöht oder Abstand klein
         if step >= 4 or price_gap <= 20:
             st.session_state["small_step_count"] = 0
 
@@ -433,334 +383,165 @@ def check_abort_conditions(user_text: str, user_price: int | None):
     return "ok", None
 
 # -----------------------------
-# [REGELN: KEINE MACHTPRIMES + PREISFLOOR]
+# OpenAI Call (du brauchst das sowieso)
 # -----------------------------
-BAD_PATTERNS = [
-    r"\balternative(n)?\b", r"\bweitere(n)?\s+interessent(en|in)\b", r"\bknapp(e|heit)\b",
-    r"\bdeadline\b", r"\bletzte chance\b", r"\bbranchen(üblich|standard)\b",
-    r"\bmarktpreis\b", r"\bneupreis\b", r"\bschmerzgrenze\b", r"\bsonst geht es\b"
-]
-def contains_power_primes(text: str) -> bool:
-    t = text.lower()
-    return any(re.search(p, t) for p in BAD_PATTERNS)
+def call_openai(messages):
+    """
+    Minimaler Wrapper. Du hast den in deinem Originalcode vermutlich
+    schon woanders – falls ja, diesen hier entfernen.
+    """
+    import openai
+    client = openai.OpenAI(api_key=API_KEY)
 
-PRICE_RE = re.compile(r"(?:€\s*)?(\d{2,5})")
-def extract_prices(text: str):
-    return [int(m.group(1)) for m in PRICE_RE.finditer(text)]
+    resp = client.chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        temperature=0.7,
+    )
+    return resp.choices[0].message.content.strip()
 
 # -----------------------------
-# [SYSTEM-PROMPT KONSTRUKTION – LLM EINBINDUNG]
+# SYSTEM PROMPT
 # -----------------------------
 def system_prompt(params):
     return f"""
 Du bist die Verkäuferperson eines neuen iPad (256 GB, Space Grey) inkl. Apple Pencil 2.
+
 Ausgangspreis: 1000 €
 Mindestpreis, unter dem du nicht verkaufen möchtest: 800 € (dieser Wert wird NIEMALS erwähnt).
 
-WICHTIGE REGELN FÜR DIE VERHANDLUNG:
-1. Du verwendest ausschließlich echte iPad-Daten (256 GB).
-2. Du erwähnst NIEMALS deine Untergrenze und sagst nie Sätze wie - "800 € ist das Minimum" - "Unter 800 € geht nicht" - oder konkrete interne Grenzen.
-3. Alle Antworten sind frei formulierte KI-Antworten, niemals Textbausteine.
-4. Du bleibst freundlich, sachlich und verhandelst realistisch.
-
-Zusatzregeln: - Keine Macht-, Druck- oder Knappheitsstrategien. - Maximal {params['max_sentences']} Sätze.
+WICHTIGE REGELN:
+- Du nennst nur Preise, die dir vom System vorgegeben werden.
+- Du erfindest niemals eigene Preise.
+- Keine Macht-, Druck- oder Knappheitsstrategien.
+- Maximal {params['max_sentences']} Sätze.
 """
 
-
 # -----------------------------
-# [OPENAI: REST CALL + LLM-REPLY]
+# GENERATE REPLY (WICHTIG: gibt TEXT + COUNTER zurück)
 # -----------------------------
-def call_openai(messages, temperature=0.3, max_tokens=240):
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": MODEL,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }
+def generate_reply(history, params: dict):
+    """
+    Returns: (bot_text, counter_price_or_none)
+    """
 
-    try:
-        r = requests.post(url, headers=headers, json=payload, timeout=60)
-    except requests.RequestException as e:
-        st.error(f"Netzwerkfehler zur OpenAI-API: {e}")
-        return None
-
-    status = r.status_code
-    text = r.text
-
-    try:
-        data = r.json()
-    except Exception:
-        data = None
-
-    if status != 200:
-        err_msg = None
-        err_type = None
-        if isinstance(data, dict):
-            err = data.get("error") or {}
-            err_msg = err.get("message")
-            err_type = err.get("type")
-        st.error(
-            f"OpenAI-API-Fehler {status}"
-            f"{' ('+err_type+')' if err_type else ''}"
-            f": {err_msg or text[:500]}"
-        )
-        st.caption("Tipp: Prüfe MODEL / API-Key / Quota / Nachrichtenformat.")
-        return None
-
-    try:
-        return data["choices"][0]["message"]["content"]
-    except Exception:
-        st.error("Antwortformat unerwartet. Rohdaten:")
-        st.code(text[:1000])
-        return None
-
-
-    # ---------------------------------------------------
-    # Antwort
-    # ---------------------------------------------------
-
-def generate_reply(history, params: dict) -> str:
-    WRONG_CAPACITY_PATTERN = r"\b(32|64|128|512|800|1000|1tb|2tb)\s?gb\b"
-
-    # Utility: Rundet auf 5er Schritte
-    def round_to_5(value: int) -> int:
-        return int(round(value / 5) * 5)
-
-    # Utility: am Ende der Verhandlung (Differenz ≤ 15 €) krumme Zahlen erlauben
-    def smart_price(value: int, user_price: int, threshold: int = 15) -> int:
-        if abs(value - user_price) <= threshold:
-            return value   # krumme Zahl erlaubt
-        return round_to_5(value)
-
-
-    # 1) Grundantwort vom LLM (wird später überschrieben, falls Preislogik greift)
-    sys_msg = {"role": "system", "content": system_prompt(params)}
-
-    # LLM-Antwort einholen
-    raw_llm_reply = call_openai([sys_msg] + history)
-    if not isinstance(raw_llm_reply, str):
-        raw_llm_reply = "Es gab einen kleinen technischen Fehler. Bitte frage nochmal. 😊"
-
-    # ---------------------------------------------------
-    # REGELPRÜFUNG
-    # ---------------------------------------------------
-    def violates_rules(text: str) -> str | None:
-        if contains_power_primes(text):
-            return "Keine Macht-/Knappheits-/Autoritäts-Frames verwenden."
-        if re.search(WRONG_CAPACITY_PATTERN, text.lower()):
-            return "Falsche Speichergröße. Verwende ausschließlich 256 GB."
-        return None
-
-    reason = violates_rules(raw_llm_reply)
-    attempts = 0
-
-    while reason and attempts < 2:
-        attempts += 1
-        retry_prompt = {
-            "role": "system",
-            "content": (
-                f"REGEL-VERSTOSS: {reason}. "
-                f"Formuliere die Antwort komplett neu, freundlich und verhandelnd, "
-                f"maximal {params['max_sentences']} Sätze."
-            )
-        }
-        raw_llm_reply = call_openai([retry_prompt] + history)
-        reason = violates_rules(raw_llm_reply)
-
-    # Speichergröße auto-korrigieren
-    raw_llm_reply = re.sub(WRONG_CAPACITY_PATTERN, "256 GB", raw_llm_reply, flags=re.IGNORECASE)
-
-
-
-    # ---------------------------------------------------
-    # 2) PREISLOGIK – realistische Händlerlogik mit 5er-Rundung, krummen Endpreisen
-    # ---------------------------------------------------
-
-    # USERPREIS EXTRAHIEREN
+    # User-Preis aus letzter User-Nachricht ziehen
     last_user_msg = ""
     for m in reversed(history):
         if m["role"] == "user":
-            last_user_msg = m["content"]
+            last_user_msg = m.get("content") or m.get("text") or ""
             break
 
     user_price = extract_user_offer(last_user_msg)
-    st.session_state["bot_offer"] = None
 
+    # 1) Wenn User keinen Preis nennt: KEIN LLM CALL (Hard rule!)
     if user_price is None:
-        instruct = (
-            "Der Nutzer hat KEIN Preisangebot als Zahl gemacht. "
-            "Antworte freundlich und kurz. "
-            "WICHTIG: Nenne KEINEN Preis, KEINE Zahlen und KEIN '€'. "
-            "Bitte den Nutzer, ein konkretes Angebot als Zahl in Euro zu nennen."
+        return (
+            "Alles klar 🙂 Nenn mir bitte dein konkretes Angebot in € (z. B. „850 €“), dann können wir verhandeln.",
+            None
         )
-        return call_openai([{"role": "system", "content": instruct}] + history)
 
+    # ---------------------
+    # Preislogik (NUR Software!)
+    # ---------------------
+    def round_to_5(value: int) -> int:
+        return int(round(value / 5) * 5)
 
-    # BOT-LETZTES GEGENANGEBOT FINDEN
-    last_bot_offer = None
-    for m in reversed(history):
-        if m["role"] == "assistant":
-            matches = re.findall(r"\d{2,5}", m["content"])
-            if matches:
-                last_bot_offer = int(matches[-1])
-            break
-
-    # Nachrichtenzahl (steuert Annäherungstempo)
-    msg_count = sum(1 for m in history if m["role"] == "assistant")
-
-
-    # ----------------------------------------
-    # WEICHE MINDESTPREISREGEL
-    # ----------------------------------------
-    if user_price is not None and user_price < params["min_price"]:
-        instruct = (
-            f"Der Nutzer bietet {user_price} €. "
-            f"Du darfst KEINEN Deal unter {params['min_price']} € akzeptieren. "
-            f"Reagiere freundlich, erkläre kurz warum dieser Preis zu niedrig ist "
-            f"und mache optional ein realistisch höheres Gegenangebot."
-        )
-        history = [{"role": "system", "content": instruct}] + history
-
-
-    # ----------------- Utility-Funktionen -----------------
-
-    def round_to_5(v):
-        return int(round(v / 5) * 5)
-
-    # kleine Variation für Endgame-Krumme Preise
     def close_range_price(v, user_price):
         diff = abs(v - user_price)
         if diff <= 15:
             return v + random.choice([-3, -2, -1, 0, 1, 2, 3])
         return v
 
-    # realistische Preisspanne
     def human_price(raw, user):
         diff = abs(raw - user)
-
         if diff > 80:
             return round_to_5(raw)
-
         if diff > 30:
             return round_to_5(raw + random.choice([-7, -3, 0, 3, 7]))
-
         return close_range_price(raw, user)
 
-    # NIE HÖHER ALS VORHER
+    # NIE HÖHER ALS VORHERIGES BOT-ANGEBOT
     def ensure_not_higher(new_price):
+        last_bot_offer = st.session_state.get("bot_offer")
         if last_bot_offer is None:
             return new_price
         if new_price >= last_bot_offer:
-            # reduziere etwas unter das alte Angebot
-            return last_bot_offer - random.randint(5, 20)
+            return max(805, last_bot_offer - random.randint(5, 20))
         return new_price
-    # NIE UNTER USER-ANGEBOT (sonst: Verkäufer wirkt unlogisch)
-    # Sonderfall: Wenn User bereits >= letztem Bot-Angebot ist -> Deal statt Gegenangebot
-    def clamp_counter_vs_user(counter: int, user_price: int):
-        nonlocal last_bot_offer
 
-        # Wenn der User dein letztes Angebot erreicht/überboten hat: nicht unterbieten, sondern akzeptieren
-        if last_bot_offer is not None and user_price >= last_bot_offer:
-            return None  # Signal: Deal
+    # Wenn User >= letztes Bot-Angebot: -> Deal möglich (kein Gegenangebot)
+    last_bot_offer = st.session_state.get("bot_offer")
+    if last_bot_offer is not None and user_price >= last_bot_offer:
+        # LLM-Text, aber ohne neuen Preis
+        sys_msg = {
+            "role": "system",
+            "content": (
+                system_prompt(params)
+                + f"\nDer Nutzer bietet {user_price} €. "
+                + "Du akzeptierst freundlich. "
+                + "Nenne keinen neuen Preis, sondern bestätige, dass ihr euch einig seid."
+            )
+        }
+        bot_text = call_openai([sys_msg] + history)
+        return bot_text, last_bot_offer
 
-        # Counter darf nicht <= User-Angebot sein (sonst "biete ich weniger als du")
-        if counter <= user_price:
-            # Endgame kleine Schritte, sonst 5er Schritt
-            bump = random.choice([1, 2, 3]) if (last_bot_offer is not None and abs(last_bot_offer - user_price) <= 15) else 5
-            counter = user_price + bump
-
-        return counter
-
-
-    # ---------------- PREISZONEN ----------------
-
-    # A) unter 600 – KEIN Gegenangebot
+    # Unter 600: ablehnen ohne Gegenangebot
     if user_price < 600:
-        instruct = (
-            f"Der Nutzer bietet {user_price} €. "
-            f"Lehne höflich ab, mache KEIN Gegenangebot, "
-            f"nenn KEINEN eigenen Preis, "
-            f"bitte nur um ein realistischeres Angebot. "
-            f"Verrate niemals interne Grenzen."
-        )
-        return call_openai([{"role": "system", "content": instruct}] + history)
+        sys_msg = {
+            "role": "system",
+            "content": (
+                system_prompt(params)
+                + f"\nDer Nutzer bietet {user_price} €. "
+                + "Lehne freundlich ab, erkläre kurz warum (neu, inkl. Pencil), "
+                + "und bitte um ein realistischeres Angebot. "
+                + "Nenne keinen eigenen Preis."
+            )
+        }
+        bot_text = call_openai([sys_msg] + history)
+        return bot_text, None
 
-
-    # B) 600–700 – HOHES Gegenangebot
+    # 600–700
     if 600 <= user_price < 700:
-        raw_price = random.randint(920, 990)
+        raw_price = random.randint(940, 990)
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
-        counter = clamp_counter_vs_user(counter, user_price)
-        if isinstance(counter, int):
-            st.session_state["bot_offer"] = counter
-        else:
-            st.session_state["bot_offer"] = None
 
-
-        instruct = (
-            f"Der Nutzer bietet {user_price} €. "
-            f"Gib EIN Gegenangebot: {counter} €. "
-            f"Nenne KEINEN anderen Preis. "
-            f"Formuliere frei, freundlich und verhandelnd."
-        )
-        return call_openai([{"role": "system", "content": instruct}] + history)
-
-
-    # C) 700–800 – realistisches Herantasten
-    if 700 <= user_price < 800:
-
-        # Frühphase: hohe Preise, Endphase: realistisch
-        if msg_count < 3:
-            raw_price = random.randint(910, 960)
-        else:
-            raw_price = random.randint(850, 930)
-
+    # 700–800
+    elif 700 <= user_price < 800:
+        raw_price = random.randint(880, 950)
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
-        counter = clamp_counter_vs_user(counter, user_price)
-        if isinstance(counter, int):
-            st.session_state["bot_offer"] = counter
-        else:
-            st.session_state["bot_offer"] = None
 
-        instruct = (
-            f"Der Nutzer bietet {user_price} €. "
-            f"Mach ein realistisches Gegenangebot: {counter} €. "
-            f"Formuliere die Antwort frei, freundlich und menschlich."
-        )
-        return call_openai([{"role": "system", "content": instruct}] + history)
-
-
-    # D) 800+ – leicht höheres Gegenangebot, noch kein sofortiger Deal
-    if user_price >= 800:
-        # je nach Gesprächsphase konservativ starten
-        if msg_count < 3:
-            raw_price = user_price + random.randint(60, 100)
-        else:
-            raw_price = user_price + random.randint(15, 40)
-
+    # >=800
+    else:
+        raw_price = user_price + random.randint(20, 60)
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
-        counter = clamp_counter_vs_user(counter, user_price)
-        if isinstance(counter, int):
-            st.session_state["bot_offer"] = counter
-        else:
-            st.session_state["bot_offer"] = None
 
+    # Clamp: counter darf niemals <= user_price sein
+    if counter <= user_price:
+        counter = user_price + random.choice([5, 10, 15])
 
-        instruct = (
-            f"Der Nutzer bietet {user_price} €. "
-            f"Mach ein leicht höheres Gegenangebot: {counter} €. "
-            f"Formuliere freundlich, verhandelnd, maximal {params['max_sentences']} Sätze."
+    # Minimum floor (intern, nie nennen)
+    counter = max(counter, params["min_price"])
+
+    # ---------------------
+    # LLM: nur Text, Preis wird vorgegeben
+    # ---------------------
+    sys_msg = {
+        "role": "system",
+        "content": (
+            system_prompt(params)
+            + f"\nDer Nutzer bietet {user_price} €. "
+            + f"Der vom System festgelegte Gegenpreis lautet {counter} €. "
+            + "Formuliere eine freundliche, sachliche Antwort, die GENAU diesen Preis nennt. "
+            + "Nenne keine anderen Preise."
         )
-        return call_openai([{"role": "system", "content": instruct}] + history)
+    }
 
+    bot_text = call_openai([sys_msg] + history)
+    return bot_text, counter
 
 # -----------------------------
 # [ERGEBNIS-LOGGING (SQLite)]
@@ -776,7 +557,6 @@ def _init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
-    # results
     c.execute("""
         CREATE TABLE IF NOT EXISTS results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -791,10 +571,9 @@ def _init_db():
     _add_column_if_missing(c, "results", "bot_variant", "TEXT")
     _add_column_if_missing(c, "results", "order_id", "TEXT")
     _add_column_if_missing(c, "results", "step", "TEXT")
-    _add_column_if_missing(c, "results", "ended_by", "TEXT")   # "user" | "bot"
-    _add_column_if_missing(c, "results", "ended_via", "TEXT")  # deal_button/deal_message/abort_button/abort_rule
+    _add_column_if_missing(c, "results", "ended_by", "TEXT")
+    _add_column_if_missing(c, "results", "ended_via", "TEXT")
 
-    # chat_messages (NEU für Friendly)
     c.execute("""
         CREATE TABLE IF NOT EXISTS chat_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -811,14 +590,7 @@ def _init_db():
     conn.commit()
     conn.close()
 
-def log_result(
-    session_id: str,
-    deal: bool,
-    price: int | None,
-    msg_count: int,
-    ended_by: str,
-    ended_via: str | None = None
-):
+def log_result(session_id: str, deal: bool, price: int | None, msg_count: int, ended_by: str, ended_via: str | None = None):
     _init_db()
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -843,7 +615,6 @@ def log_result(
     ))
     conn.commit()
     conn.close()
-
 
 def log_chat_message(session_id, role, text, ts, msg_index):
     _init_db()
@@ -900,7 +671,6 @@ def load_results_df() -> pd.DataFrame:
     df["ended_via"] = df["ended_via"].fillna("")
     return df
 
-
 def export_all_chats_to_txt() -> str:
     _init_db()
     conn = sqlite3.connect(DB_PATH)
@@ -929,55 +699,6 @@ def export_all_chats_to_txt() -> str:
 
     return "\n".join(output)
 
-
-def extract_price_from_bot(msg: str) -> int | None:
-    t = (msg or "").lower()
-
-    # Zahlen, die sehr wahrscheinlich Specs sind
-    gb_numbers = re.findall(r"(\d{2,5})\s*gb", t)
-    gb_numbers = {int(x) for x in gb_numbers}
-
-    # ✅ Nur als Angebot zählen, wenn klare Angebots-Wörter vorkommen
-    OFFER_HINTS = [
-        "mein gegenangebot", "mein angebot", "ich biete", "ich kann", "ich würde",
-        "ich würde dir", "ich könnte", "würde dir anbieten", "preis wäre",
-        "machen wir", "deal bei", "einverstanden bei", "ich komme dir entgegen",
-        "ich bin bereit", "bereit", "anzubieten", "zu diesem preis", "deal festmachen"
-    ]
-
-    if not any(h in t for h in OFFER_HINTS):
-        return None
-
-    # 1) "920 €" / "920€"
-    euro_matches = re.findall(r"(\d{2,5})\s*€", t)
-    for m in euro_matches[::-1]:
-        val = int(m)
-        if val not in gb_numbers and 600 <= val <= 2000:
-            return val
-
-    # 2) Keyword-nahe Zahl: "gegenangebot 910", "preis wäre 880", "ich biete 900"
-    word_matches = re.findall(
-        r"(?:gegenangebot|angebot|preis|für|deal bei|einverstanden bei)\s*:?[^0-9]*(\d{2,5})",
-        t
-    )
-    for m in word_matches[::-1]:
-        val = int(m)
-        if val not in gb_numbers and 600 <= val <= 2000:
-            return val
-
-    # 3) Fallback: letzte plausible Zahl (aber nur wenn OFFER_HINTS oben aktiv)
-    all_nums = [int(x) for x in re.findall(r"\d{2,5}", t)]
-    for n in all_nums[::-1]:
-        if n in gb_numbers:
-            continue
-        if n in (13, 32, 64, 128, 256, 512, 1024, 2048):
-            continue
-        if 600 <= n <= 2000:
-            return n
-
-    return None
-
-
 # -----------------------------
 # [Szenario-Kopf]
 # -----------------------------
@@ -989,14 +710,13 @@ with st.container():
 st.caption(f"Session-ID: `{st.session_state['session_id']}`")
 
 # -----------------------------
-# [CHAT-UI – vollständig LLM-basiert]
+# [CHAT-UI]
 # -----------------------------
 st.subheader("💬 iPad Verhandlungs-Bot")
 
-# Zeitzone definieren
 tz = pytz.timezone("Europe/Berlin")
 
-# 1) Initiale Bot-Nachricht einmalig
+# Initiale Bot-Nachricht
 if len(st.session_state["history"]) == 0:
     first_msg = (
         "Hi! Ich biete ein neues iPad (256 GB, Space Grey) inklusive Apple Pencil (2. Gen) "
@@ -1007,59 +727,33 @@ if len(st.session_state["history"]) == 0:
 
     st.session_state["history"].append({
         "role": "assistant",
-        "text": first_msg,   # ✅ statt bot_text
+        "text": first_msg,
         "ts": bot_ts,
     })
 
     msg_index = len(st.session_state["history"]) - 1
-    log_chat_message(
-        st.session_state["session_id"],
-        "assistant",
-        first_msg,           # ✅ statt bot_text
-        bot_ts,
-        msg_index
-    )
+    log_chat_message(st.session_state["session_id"], "assistant", first_msg, bot_ts, msg_index)
 
+# Eingabe
+user_input = st.chat_input("Deine Nachricht", disabled=st.session_state["closed"])
 
-# 2) Eingabefeld
-user_input = st.chat_input(
-    "Deine Nachricht",
-    disabled=st.session_state["closed"],
-)
-
-# 3) Wenn User etwas sendet → LLM-Antwort holen
 if user_input and not st.session_state["closed"]:
 
-    # Zeitstempel erzeugen
     now = datetime.now(tz).strftime("%d.%m.%Y %H:%M")
 
-    # Nutzer-Nachricht speichern
     st.session_state["history"].append({
         "role": "user",
         "text": user_input.strip(),
         "ts": now,
     })
     msg_index = len(st.session_state["history"]) - 1
-    log_chat_message(
-        st.session_state["session_id"],
-        "user",
-        user_input.strip(),
-        now,
-        msg_index
-    )
+    log_chat_message(st.session_state["session_id"], "user", user_input.strip(), now, msg_index)
 
+    # LLM History
+    llm_history = [{"role": m["role"], "content": m["text"]} for m in st.session_state["history"]]
 
-    # LLM-Verlauf vorbereiten (role/content)
-    llm_history = [
-        {"role": m["role"], "content": m["text"]}
-        for m in st.session_state["history"]
-    ]
-
-    # Nutzerpreis extrahieren
     user_price = extract_user_offer(user_input)
-
     decision, msg = check_abort_conditions(user_input, user_price)
-
 
     if decision == "abort":
         st.session_state["closed"] = True
@@ -1070,53 +764,35 @@ if user_input and not st.session_state["closed"]:
             "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
         })
 
-        msg_count = len([
-            m for m in st.session_state["history"]
-            if m["role"] in ("user", "assistant")
-        ])
+        msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
 
-        log_result(
-            st.session_state["session_id"],
-            False,
-            None,
-            msg_count,
-            ended_by="bot",
-            ended_via="abort_rule"
-        )
+        log_result(st.session_state["session_id"], False, None, msg_count, ended_by="bot", ended_via="abort_rule")
         run_survey_and_stop()
         st.stop()
 
     elif decision == "warn":
         bot_text = msg
+        counter = None
 
     else:
-        bot_text = generate_reply(llm_history, st.session_state.params)
+        bot_text, counter = generate_reply(llm_history, st.session_state.params)
 
-    # Bot-Nachricht speichern
+    # Bot speichern
+    bot_ts = datetime.now(tz).strftime("%d.%m.%Y %H:%M")
     st.session_state["history"].append({
         "role": "assistant",
         "text": bot_text,
-        "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
+        "ts": bot_ts,
     })
 
-    bot_ts = datetime.now(tz).strftime("%d.%m.%Y %H:%M")
     msg_index = len(st.session_state["history"]) - 1
-    log_chat_message(
-        st.session_state["session_id"],
-        "assistant",
-        bot_text,
-        bot_ts,
-        msg_index
-    )
+    log_chat_message(st.session_state["session_id"], "assistant", bot_text, bot_ts, msg_index)
 
-    # bot_offer wird deterministisch in generate_reply() gesetzt.
-    # Hier NICHT nochmal aus Bot-Text extrahieren, sonst überschreiben wir ihn.
-    pass
+    # WICHTIG: bot_offer nur aus Software-Preis!
+    if counter is not None:
+        st.session_state["bot_offer"] = counter
 
-
-
-# 4) Chat-Verlauf anzeigen (inkl. frischer Bot-Antwort) 
-# Profilbilder laden
+# Verlauf anzeigen
 BOT_AVATAR  = img_to_base64("bot.png")
 USER_AVATAR = img_to_base64("user.png")
 
@@ -1126,9 +802,7 @@ for item in st.session_state["history"]:
     ts = item["ts"]
 
     is_user = (role == "user")
-
     avatar_b64 = USER_AVATAR if is_user else BOT_AVATAR
-
     side = "right" if is_user else "left"
     klass = "msg-user" if is_user else "msg-bot"
 
@@ -1144,8 +818,7 @@ for item in st.session_state["history"]:
     </div>
     """, unsafe_allow_html=True)
 
-
-# 5) Deal bestätigen / Verhandlung beenden
+# Deal / Abbruch
 if not st.session_state["closed"]:
 
     deal_col1, deal_col2 = st.columns([1, 1])
@@ -1153,22 +826,18 @@ if not st.session_state["closed"]:
     bot_offer = st.session_state.get("bot_offer", None)
     show_deal = (bot_offer is not None)
 
-    # DEAL-BUTTON
     with deal_col1:
         if st.button(
             f"💚 Deal bestätigen: {bot_offer} €" if show_deal else "Deal bestätigen",
             disabled=not show_deal,
             use_container_width=True
         ):
-            bot_price = st.session_state.get("bot_offer")
-            msg_count = len([
-                m for m in st.session_state["history"]
-                if m["role"] in ("user", "assistant")
-            ])
+            msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
+
             log_result(
                 st.session_state["session_id"],
                 True,
-                bot_price,
+                bot_offer,
                 msg_count,
                 ended_by="user",
                 ended_via="deal_button"
@@ -1177,14 +846,9 @@ if not st.session_state["closed"]:
             st.session_state["closed"] = True
             run_survey_and_stop()
 
-    # ABBRUCH-BUTTON
     with deal_col2:
         if st.button("❌ Verhandlung beenden", use_container_width=True):
-
-            msg_count = len([
-                m for m in st.session_state["history"]
-                if m["role"] in ("user", "assistant")
-            ])
+            msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
 
             log_result(
                 st.session_state["session_id"],
@@ -1198,7 +862,7 @@ if not st.session_state["closed"]:
             run_survey_and_stop()
 
 # -----------------------------
-# [ADMIN-BEREICH: Ergebnisse (privat)]
+# Admin Bereich (wie bei dir)
 # -----------------------------
 st.sidebar.header("📊 Ergebnisse")
 
@@ -1217,9 +881,6 @@ else:
 if pwd_ok:
     st.sidebar.success("Zugang gewährt.")
 
-    # =============================
-    # 📋 Umfrageergebnisse
-    # =============================
     with st.sidebar.expander("📋 Umfrageergebnisse", expanded=False):
         if os.path.exists("survey_results.xlsx"):
             df_s = pd.read_excel("survey_results.xlsx")
@@ -1240,9 +901,6 @@ if pwd_ok:
         else:
             st.info("Noch keine Umfrage-Daten vorhanden.")
 
-    # =============================
-    # 📊 Verhandlungsergebnisse
-    # =============================
     with st.sidebar.expander("Alle Verhandlungsergebnisse", expanded=True):
         df = load_results_df()
 
@@ -1271,10 +929,6 @@ if pwd_ok:
                 use_container_width=True,
             )
 
-        
-        # =============================
-        # 📥 CHAT-EXPORT (NEU)
-        # =============================
         st.markdown("### 📥 Chat-Export")
 
         chat_txt = export_all_chats_to_txt()
@@ -1286,21 +940,12 @@ if pwd_ok:
             mime="text/plain",
             use_container_width=True
         )
-            
-        # -----------------------------
-        # Session-Auswahl für Chat
-        # -----------------------------
+
         st.markdown("---")
         st.subheader("💬 Chatverlauf anzeigen")
 
-        selected_session = st.selectbox(
-            "Verhandlung auswählen",
-            df["session_id"].unique()
-        )
+        selected_session = st.selectbox("Verhandlung auswählen", df["session_id"].unique())
 
-        # -----------------------------
-        # Chat-Nachrichten anzeigen
-        # -----------------------------
         if selected_session:
             chat_df = load_chat_for_session(selected_session)
 
@@ -1326,48 +971,3 @@ if pwd_ok:
                     <div class="meta">{row["ts"]}</div>
                 </div>
                 """, unsafe_allow_html=True)
-
-# ----------------------------
-# Admin Reset mit Bestätigung
-# ----------------------------
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Admin-Tools")
-
-    # Zustand für Sicherheitsabfrage speichern
-    if "confirm_delete" not in st.session_state:
-        st.session_state["confirm_delete"] = False
-
-    # Erste Stufe: Benutzer klickt → Sicherheitswarnung erscheint
-    if not st.session_state["confirm_delete"]:
-        if st.sidebar.button("🗑️ Alle Ergebnisse löschen"):
-            st.session_state["confirm_delete"] = True
-            st.sidebar.warning("⚠️ Bist du sicher, dass du **ALLE Ergebnisse** löschen möchtest?")
-            st.sidebar.info("Dieser Vorgang kann nicht rückgängig gemacht werden.")
-    else:
-        # Zweite Stufe: Zwei Buttons erscheinen
-        col1, col2 = st.sidebar.columns(2)
-
-        with col1:
-            if st.button("❌ Abbrechen"):
-                st.session_state["confirm_delete"] = False
-
-
-        with col2:
-            if st.button("✅ Ja, löschen"):
-                # Verhandlungsergebnisse (SQLite)
-                conn = sqlite3.connect(DB_PATH)
-                c = conn.cursor()
-                c.execute("DELETE FROM results")
-                c.execute("DELETE FROM chat_messages")
-                conn.commit()
-                conn.close()
-
-                # Umfrageergebnisse (Excel)
-                if os.path.exists(SURVEY_FILE):
-                    os.remove(SURVEY_FILE)
-
-                st.session_state["confirm_delete"] = False
-                st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
-                st.experimental_rerun()
-
-                
