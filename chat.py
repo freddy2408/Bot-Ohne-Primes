@@ -276,6 +276,7 @@ DISQUALIFY_CONTEXT = [
     "zu viel", "zu teuer", "nicht", "kein", "niemals", "kostet", "kosten", "preislich zu hoch",
     "würde ich nicht", "geht nicht", "unmöglich", "zu hoch", "zu viel", "zu teuer", "preislich zu hoch", "zu hoch",
     "ist mir zu viel", "ist mir zu teuer"
+    "vielleicht", "wie sind", "wie wäre", "was ist mit", "gehen wir", "kannst du", "würde", "okay", "ok", "vb", "verhandlungsbasis"
 ]
 
 OFFER_KEYWORDS = [
@@ -590,17 +591,13 @@ def generate_reply(history, params: dict) -> str:
     user_price = extract_user_offer(last_user_msg)
 
     if user_price is None:
-        # HARTE REGEL: Wenn User keinen Preis nennt, darf Bot keinen Preis nennen.
-        if re.search(r"\d{2,5}", raw_llm_reply) or "€" in raw_llm_reply:
-            instruct = (
-                "Der Nutzer hat keinen Preis als Zahl genannt. "
-                "Antworte freundlich, aber nenne KEINEN Preis und KEINE Zahlen. "
-                "Bitte den Nutzer, ein konkretes Angebot in Euro als Zahl zu nennen."
-            )
-            return call_openai([{"role": "system", "content": instruct}] + history)
-
-
-        return raw_llm_reply
+        instruct = (
+            "Der Nutzer hat KEIN Preisangebot als Zahl gemacht. "
+            "Antworte freundlich und kurz. "
+            "WICHTIG: Nenne KEINEN Preis, KEINE Zahlen und KEIN '€'. "
+            "Bitte den Nutzer, ein konkretes Angebot als Zahl in Euro zu nennen."
+        )
+        return call_openai([{"role": "system", "content": instruct}] + history)
 
 
     # BOT-LETZTES GEGENANGEBOT FINDEN
@@ -934,7 +931,7 @@ def extract_price_from_bot(msg: str) -> int | None:
     # ✅ Nur als Angebot zählen, wenn klare Angebots-Wörter vorkommen
     OFFER_HINTS = [
         "mein gegenangebot", "mein angebot", "ich biete", "ich kann", "ich würde",
-        "ich würde dir", "ich könnte", "würde dir anbieten", "preis wäre", "für",
+        "ich würde dir", "ich könnte", "würde dir anbieten", "preis wäre",
         "machen wir", "deal bei", "einverstanden bei", "ich komme dir entgegen",
         "ich bin bereit", "bereit", "anzubieten", "zu diesem preis", "deal festmachen"
     ]
@@ -1105,8 +1102,7 @@ if user_input and not st.session_state["closed"]:
 
     # Bot-Angebot extrahieren & speichern (wichtig für price_gap Logik!)
     new_offer = extract_price_from_bot(bot_text)
-    if new_offer is not None:
-        st.session_state["bot_offer"] = new_offer
+    st.session_state["bot_offer"] = new_offer  # setzt auch None sauber
 
 
 # 4) Chat-Verlauf anzeigen (inkl. frischer Bot-Antwort) 
