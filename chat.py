@@ -196,6 +196,18 @@ CHAT_CSS = """
 st.markdown(CHAT_CSS, unsafe_allow_html=True)
 
 SURVEY_FILE = "survey_results.xlsx"
+
+
+ASK_PRICE_VARIANTS = [
+    "Alles klar – was wäre dein konkretes Angebot? Bitte nenne eine Zahl in €.",
+    "Danke dir. Welchen Preis bietest du? Bitte als Zahl in €.",
+    "Verstanden. Nenn mir bitte deinen Preisvorschlag als Zahl in €.",
+    "Okay! Damit wir weitermachen können: Welche Zahl in € schwebt dir vor?",
+    "Gern – welches konkrete Angebot möchtest du machen? Bitte als Zahl in €.",
+    "Alles gut. Bitte schick mir deinen Preis als Zahl in € (z.B. nur die Zahl).",
+    "Klingt gut – welchen Betrag möchtest du anbieten? Bitte als Zahl in €.",
+]
+
 # ----------------------------
 # Fragebogen (nur nach Abschluss)
 # ----------------------------
@@ -282,7 +294,7 @@ DISQUALIFY_CONTEXT = [
 OFFER_KEYWORDS = [
     "ich biete", "biete", "mein angebot", "angebot", "zahle", "ich zahle", "würde geben",
     "ich würde geben", "kann geben", "gebe", "für", "bei", "preis wäre", "mein preis", "ich biete", "mein angebot", "angebot", "ich zahle", "zahle", "würde geben", "ich würde geben", "kann geben", "gebe",
-    "mein preis", "preis wäre"
+    "mein preis", "preis wäre","mach"
 ]
 
 UNIT_WORDS_AFTER_NUMBER = re.compile(
@@ -600,10 +612,7 @@ def generate_reply(history, params: dict) -> str:
 
     # ✅ 1) Wenn KEIN Preis vom Nutzer -> KEIN LLM-Call, KEIN Gegenangebot, KEINE Zahlen
     if user_price is None:
-        return (
-            "Danke dir! Damit wir sinnvoll weiterverhandeln können: "
-            "Welchen konkreten Preis möchtest du anbieten? (Bitte als Zahl in €)"
-        )
+        return random.choice(ASK_PRICE_VARIANTS)
 
     # ✅ Letztes Bot-Angebot finden (nur zur Logik, nicht aus LLM)
     last_bot_offer = None
