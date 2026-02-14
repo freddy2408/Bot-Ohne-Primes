@@ -589,6 +589,7 @@ def generate_reply(history, params: dict) -> str:
             break
 
     user_price = extract_user_offer(last_user_msg)
+    st.session_state["bot_offer"] = None
 
     if user_price is None:
         instruct = (
@@ -696,6 +697,7 @@ def generate_reply(history, params: dict) -> str:
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
         counter = clamp_counter_vs_user(counter, user_price)
+        st.session_state["bot_offer"] = int(counter)
         if counter is None:
             pass
 
@@ -720,6 +722,7 @@ def generate_reply(history, params: dict) -> str:
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
         counter = clamp_counter_vs_user(counter, user_price)
+        st.session_state["bot_offer"] = int(counter)
         if counter is None:
             pass
 
@@ -742,6 +745,7 @@ def generate_reply(history, params: dict) -> str:
         counter = human_price(raw_price, user_price)
         counter = ensure_not_higher(counter)
         counter = clamp_counter_vs_user(counter, user_price)
+        st.session_state["bot_offer"] = int(counter)
         if counter is None:
             pass
 
