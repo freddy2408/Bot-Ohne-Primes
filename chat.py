@@ -603,8 +603,6 @@ def llm_no_price_reply(history, params: dict, reason: str = "deal_signal") -> st
     instruct = (
         "Formuliere eine kurze, freundliche Antwort.\n"
         "Harte Regel: Nenne KEINEN Preis und KEINE Eurobeträge und keine konkreten Angebotszahlen.\n"
-        "Du darfst den Nutzer bitten, den Deal-Button zu nutzen oder kurz bestätigen, dass ihr euch einig seid.\n"
-        f"Kontext: {reason}."
     )
     history2 = [{"role": "system", "content": instruct}] + history
     # Wichtig: user_price=None, counter=None => allowed set ist leer -> keine Preise erlaubt
