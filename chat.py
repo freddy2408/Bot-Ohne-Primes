@@ -201,16 +201,6 @@ st.markdown(CHAT_CSS, unsafe_allow_html=True)
 SURVEY_FILE = "survey_results.xlsx"
 
 
-ASK_PRICE_VARIANTS = [
-    "Alles klar – was wäre dein konkretes Angebot? Bitte nenne eine Zahl in €.",
-    "Danke dir. Welchen Preis bietest du? Bitte als Zahl in €.",
-    "Verstanden. Nenn mir bitte deinen Preisvorschlag als Zahl in €.",
-    "Okay! Damit wir weitermachen können: Welche Zahl in € schwebt dir vor?",
-    "Gern – welches konkrete Angebot möchtest du machen? Bitte als Zahl in €.",
-    "Alles gut. Bitte schick mir deinen Preis als Zahl in € (z.B. nur die Zahl).",
-    "Klingt gut – welchen Betrag möchtest du anbieten? Bitte als Zahl in €.",
-]
-
 # ----------------------------
 # Fragebogen (nur nach Abschluss)
 # ----------------------------
@@ -290,8 +280,8 @@ PRICE_TOKEN_RE = re.compile(r"(?<!\d)(\d{2,5})(?!\d)")
 DISQUALIFY_CONTEXT = [
     "zu viel", "zu teuer", "nicht", "kein", "niemals", "kostet", "kosten", "preislich zu hoch",
     "würde ich nicht", "geht nicht", "unmöglich", "zu hoch", "zu viel", "zu teuer", "preislich zu hoch", "zu hoch",
-    "ist mir zu viel", "ist mir zu teuer"
-    "vielleicht", "wie sind", "wie wäre", "was ist mit", "gehen wir", "kannst du", "würde", "okay", "ok", "vb", "verhandlungsbasis"
+    "ist mir zu viel", "ist mir zu teuer",
+    "vielleicht", "wie sind", "wie wäre", "was ist mit", "gehen wir", "kannst du", "würde", "okay", "ok", "vb", "verhandlungsbasis",
 ]
 
 OFFER_KEYWORDS = [
@@ -553,7 +543,7 @@ def llm_with_price_guard(history, params: dict, user_price: int | None, counter:
     """
     LLM darf nur user_price / counter als Euro-Zahlen nennen.
     """
-    WRONG_CAPACITY_PATTERN = r"\b(32|64|128|512|800|1000|1tb|2tb)\s?gb\b"
+    WRONG_CAPACITY_PATTERN = r"\b(32|64|128|512|1tb|2tb)\s?gb\b"
 
     allowed: set[int] = set()
     if isinstance(user_price, int):
@@ -596,17 +586,30 @@ def llm_with_price_guard(history, params: dict, user_price: int | None, counter:
     return f"Ich verstehe dich. Ich kann dir {counter} € anbieten – wenn das passt, können wir den Deal festmachen."
 
 
-def llm_no_price_reply(history, params: dict, reason: str = "deal_signal") -> str:
+def llm_no_price_reply(history, params: dict, reason: str = "") -> str:
     """
-    LLM formuliert frei, aber darf KEINE Euro-Preise nennen (keine 600–2000 Zahlen).
+    LLM formuliert frei, darf aber KEINE Euro-Preise nennen.
+    Wird genutzt bei:
+    - kein Preis erkannt
+    - Deal-Signal
     """
+
     instruct = (
-        "Formuliere eine kurze, freundliche Antwort.\n"
-        "Harte Regel: Nenne KEINEN Preis und KEINE Eurobeträge und keine konkreten Angebotszahlen.\n"
+        "Formuliere eine freundliche, natürliche Antwort im Rahmen einer Preisverhandlung.\n"
+        "Wenn noch kein konkretes Preisangebot gemacht wurde, bitte den Nutzer höflich um eine konkrete Zahl in €.\n"
+        "WICHTIG: Nenne KEINEN Preis, KEINE Eurobeträge und keine konkreten Zahlenangebote.\n"
+        f"Kontext: {reason}."
     )
+
     history2 = [{"role": "system", "content": instruct}] + history
-    # Wichtig: user_price=None, counter=None => allowed set ist leer -> keine Preise erlaubt
-    return llm_with_price_guard(history2, params, user_price=None, counter=None, allow_no_price=True)
+
+    return llm_with_price_guard(
+        history2,
+        params,
+        user_price=None,
+        counter=None,
+        allow_no_price=True
+    )
 
     # ---------------------------------------------------
     # Antwort
@@ -627,7 +630,11 @@ def generate_reply(history, params: dict) -> str:
 
     # ✅ 1) Wenn KEIN Preis vom Nutzer -> KEIN LLM-Call mit Preisen
     if user_price is None:
-        return random.choice(ASK_PRICE_VARIANTS)
+        return llm_no_price_reply(
+            history,
+            params,
+            reason="no_price_detected"
+        )
 
     msg_count = sum(1 for m in history if m["role"] == "assistant")
 
@@ -991,7 +998,7 @@ def extract_price_from_bot(msg: str) -> int | None:
             continue
         if n in (13, 32, 64, 128, 256, 512, 1024, 2048):
             continue
-        if 800 <= n <= 1000:
+        if 600 <= n <= 2000:
             return n
 
     return None
