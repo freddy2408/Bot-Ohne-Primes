@@ -648,14 +648,6 @@ def generate_reply(history, params: dict) -> tuple[str, str]:
 
         return close_range_price(raw, user)
 
-    # NIE HÖHER ALS VORHER
-    def ensure_not_higher(new_price):
-        if last_bot_offer is None:
-            return new_price
-        if new_price >= last_bot_offer:
-            return last_bot_offer - random.randint(5, 20)
-        return new_price
-
     # NIE UNTER USER-ANGEBOT (sonst unlogisch)
     def clamp_counter_vs_user(counter: int, user_price: int):
         nonlocal last_bot_offer
