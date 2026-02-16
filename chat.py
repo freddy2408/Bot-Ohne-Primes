@@ -596,6 +596,20 @@ def llm_with_price_guard(history, params: dict, user_price: int | None, counter:
     return f"Ich verstehe dich. Ich kann dir {counter} € anbieten – wenn das passt, können wir den Deal festmachen."
 
 
+def llm_no_price_reply(history, params: dict, reason: str = "deal_signal") -> str:
+    """
+    LLM formuliert frei, aber darf KEINE Euro-Preise nennen (keine 600–2000 Zahlen).
+    """
+    instruct = (
+        "Formuliere eine kurze, freundliche Antwort.\n"
+        "Harte Regel: Nenne KEINEN Preis und KEINE Eurobeträge und keine konkreten Angebotszahlen.\n"
+        "Du darfst den Nutzer bitten, den Deal-Button zu nutzen oder kurz bestätigen, dass ihr euch einig seid.\n"
+        f"Kontext: {reason}."
+    )
+    history2 = [{"role": "system", "content": instruct}] + history
+    # Wichtig: user_price=None, counter=None => allowed set ist leer -> keine Preise erlaubt
+    return llm_with_price_guard(history2, params, user_price=None, counter=None, allow_no_price=True)
+
     # ---------------------------------------------------
     # Antwort
     # ---------------------------------------------------
@@ -705,7 +719,7 @@ def generate_reply(history, params: dict) -> str:
             st.session_state["last_bot_offer"] = counter
         else:
             st.session_state["bot_offer"] = None
-            return "Alles klar – wenn du möchtest, kannst du den Deal jetzt bestätigen."
+            return llm_no_price_reply(history, params, reason="user_reached_last_offer")
 
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
@@ -731,7 +745,7 @@ def generate_reply(history, params: dict) -> str:
             st.session_state["last_bot_offer"] = counter
         else:
             st.session_state["bot_offer"] = None
-            return "Alles klar – wenn du möchtest, kannst du den Deal jetzt bestätigen."
+            return llm_no_price_reply(history, params, reason="user_reached_last_offer")
 
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
@@ -759,7 +773,7 @@ def generate_reply(history, params: dict) -> str:
             st.session_state["last_bot_offer"] = counter
         else:
             st.session_state["bot_offer"] = None
-            return "Alles klar – wenn du möchtest, kannst du den Deal jetzt bestätigen."
+            return llm_no_price_reply(history, params, reason="user_reached_last_offer")
 
         instruct = (
             f"Der Nutzer bietet {user_price} €. "
