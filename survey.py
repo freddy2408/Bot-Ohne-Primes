@@ -130,7 +130,18 @@ def show_survey():
     st.markdown("---")
 
     # ---------------------------
-    # 7. Preisliches Ergebnis (1–6)
+    # 7. Fairness wahrgenommen (1–6)
+    # ---------------------------
+    fairness = labeled_select_scale(
+        "7. Wie fair haben Sie den Verhandlungsverlauf empfunden?",
+        "sehr unfair",
+        "sehr fair",
+        key="s_fairness"
+    )
+    st.markdown("---")
+
+    # ---------------------------
+    # 8. Preisliches Ergebnis (1–6)
     # ---------------------------
     better_result = labeled_select_scale(
         "7. Hätten Sie ein besseres preisliches Ergebnis erzielen können?",
@@ -141,7 +152,7 @@ def show_survey():
     st.markdown("---")
 
     # ---------------------------
-    # 8. Abweichung Verhandlungsstil (1–6)
+    # 9. Abweichung Verhandlungsstil (1–6)
     # ---------------------------
     st.write("8. Wie stark sind Sie von Ihrem normalen Verhandlungsverhalten abgewichen?")
 
@@ -166,7 +177,7 @@ def show_survey():
     st.markdown("---")
 
     # ---------------------------
-    # 9. Verhandlungsbereitschaft im Alltag (1–6)
+    # 10. Verhandlungsbereitschaft im Alltag (1–6)
     # ---------------------------
     willingness = labeled_select_scale(
         "9. Wie hoch ist Ihre Bereitschaft zu verhandeln im Alltag?",
@@ -177,7 +188,7 @@ def show_survey():
     st.markdown("---")
 
     # ---------------------------
-    # 10. Wiederverhandlung – keine Vorauswahl
+    # 11. Wiederverhandlung – keine Vorauswahl
     # ---------------------------
     st.write("10. Würden Sie erneut mit dem Bot verhandeln wollen?")
 
@@ -206,6 +217,7 @@ def show_survey():
             "field_other": field_other,
             "satisfaction_outcome": satisfaction_outcome,
             "satisfaction_process": satisfaction_process,
+            "fairness": fairness,
             "better_result": better_result,
             "deviation": deviation,
             "willingness": willingness,
