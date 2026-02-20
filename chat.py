@@ -44,6 +44,12 @@ if "admin_reset_done" not in st.session_state:
 if "last_bot_offer" not in st.session_state:
     st.session_state["last_bot_offer"] = None  # echtes letztes Gegenangebot (nur Preislogik!)
 
+if "final_bot_price" not in st.session_state:
+    st.session_state["final_bot_price"] = None
+
+if "snap_to_user" not in st.session_state:
+    st.session_state["snap_to_user"] = False
+
 # -----------------------------
 # Participant ID + Order (shared across bots)
 # -----------------------------
@@ -362,19 +368,28 @@ INSULT_PATTERNS = [
     r"\b(drecks(?:bot|kerl|typ))\b",
 ]
 
+
+def is_close_enough_deal(user_price: int | None, bot_price: int | None, tol: int = 5) -> bool:
+    if user_price is None or bot_price is None:
+        return False
+    return abs(user_price - bot_price) <= tol
+
+
 def check_abort_conditions(user_text: str, user_price: int | None):
+    # 0) Beleidigungen → sofort Abbruch
     for pat in INSULT_PATTERNS:
-        if re.search(pat, user_text.lower()):
+        if re.search(pat, (user_text or "").lower()):
             return "abort", (
                 "Ich beende die Verhandlung an dieser Stelle. "
                 "Ein respektvoller Umgang ist für mich Voraussetzung."
             )
 
+    # Wenn kein Preis erkannt wurde → keine Preislogik/Abbruchlogik
     if user_price is None:
         return "ok", None
 
-    last_price = st.session_state["last_user_price"]
-    bot_offer = st.session_state.get("bot_offer")
+    last_price = st.session_state.get("last_user_price")
+    bot_offer_for_gap = st.session_state.get("last_bot_offer")  # ✅ stabiler als bot_offer
 
     # 1) Angebot wiederholen
     if last_price == user_price:
@@ -383,39 +398,45 @@ def check_abort_conditions(user_text: str, user_price: int | None):
         st.session_state["repeat_offer_count"] = 0
 
     if st.session_state["repeat_offer_count"] == 1:
-        return "warn", "Dein Angebot ist identisch mit dem vorherigen. " "Bitte schlage einen neuen Preis vor, damit wir weiter verhandeln können."
+        # last_user_price updaten, damit der nächste Vergleich korrekt ist
+        st.session_state["last_user_price"] = user_price
+        return "warn", (
+            "Dein Angebot ist identisch mit dem vorherigen. "
+            "Bitte schlage einen neuen Preis vor, damit wir weiter verhandeln können."
+        )
 
     if st.session_state["repeat_offer_count"] >= 2:
+        st.session_state["last_user_price"] = user_price
         return "abort", (
             "Da sich dein Angebot erneut nicht verändert hat, "
             "sehe ich aktuell keine Grundlage für eine weitere Verhandlung und beende sie."
         )
 
-    # 2) Rückschritte
-    if last_price and user_price < last_price:
-        if not st.session_state["warning_given"]:
+    # 2) Rückschritte (Preis sinkt)
+    if last_price is not None and user_price < last_price:
+        if not st.session_state.get("warning_given", False):
             st.session_state["warning_given"] = True
+            st.session_state["last_user_price"] = user_price
             return "warn", (
                 "Dein neues Angebot liegt unter deinem vorherigen. "
                 "Das erschwert eine konstruktive Verhandlung. "
                 "Bitte bleib bei steigenden Angeboten, sonst muss ich die Verhandlung beenden."
             )
+
+        st.session_state["last_user_price"] = user_price
         return "abort", (
             "Da der Preis erneut gesunken ist, "
             "beende ich die Verhandlung an dieser Stelle."
-
         )
 
     # 3) Mini-Erhöhungen trotz großer Distanz
-    if bot_offer and last_price is not None:
-
-        price_gap = bot_offer - user_price
+    if bot_offer_for_gap is not None and last_price is not None:
+        price_gap = bot_offer_for_gap - user_price
         step = user_price - last_price
 
+        # große Distanz, aber sehr kleine Erhöhung
         if price_gap > 20 and 0 < step < 4:
             st.session_state["small_step_count"] += 1
-
-            # wichtig: last_user_price hier updaten
             st.session_state["last_user_price"] = user_price
 
             if st.session_state["small_step_count"] == 1:
@@ -430,13 +451,13 @@ def check_abort_conditions(user_text: str, user_price: int | None):
                 "beende ich die Verhandlung an dieser Stelle."
             )
 
-        # Reset nur wenn sinnvoll erhöht oder Abstand klein
+        # Reset nur wenn sinnvoll erhöht ODER Abstand klein
         if step >= 4 or price_gap <= 20:
             st.session_state["small_step_count"] = 0
 
+    # Am Ende: last_user_price immer updaten
     st.session_state["last_user_price"] = user_price
     return "ok", None
-
 # -----------------------------
 # [REGELN: KEINE MACHTPRIMES + PREISFLOOR]
 # -----------------------------
@@ -669,27 +690,37 @@ def generate_reply(history, params: dict) -> str:
             step = random.randint(5, 12)
         return max(base - step, min_price)
 
-    # ✅ verhindert nur Erhöhung (überbieten), erzwingt aber nicht zwingend Nachgabe
     def ensure_not_higher(new_price: int, min_price: int) -> int:
+        nonlocal last_bot_offer
         if last_bot_offer is None:
             return max(new_price, min_price)
         if new_price >= last_bot_offer:
             new_price = last_bot_offer - random.randint(5, 15)
         return max(new_price, min_price)
 
-    def clamp_counter_vs_user(counter: int, user_price: int) -> int | None:
-        # wenn user >= letztes bot-angebot -> Deal-Signal
-        if last_bot_offer is not None and user_price >= last_bot_offer:
-            return None
 
-        # Verkäufer darf nicht unterbieten
-        if counter <= user_price:
-            bump = random.choice([1, 2, 3]) if (last_bot_offer is not None and abs(last_bot_offer - user_price) <= 15) else 5
-            counter = user_price + bump
+    # ✅ verhindert nur Erhöhung (überbieten), erzwingt aber nicht zwingend Nachgabe
+    def clamp_counter_vs_user(counter: int, user_price_: int):
+        nonlocal last_bot_offer
 
-        # ✅ niemals unter min_price als Bot-Angebot
-        counter = max(counter, params["min_price"])
-        return counter
+        # 1) Wenn User nahe am letzten Bot-Angebot ist, Bot bleibt bei last_bot_offer
+        if last_bot_offer is not None:
+            deal_threshold = max(MIN, last_bot_offer - 5)
+            if user_price_ >= deal_threshold:
+                st.session_state["snap_to_user"] = False
+                return last_bot_offer
+
+        # 2) Wenn berechnetes Gegenangebot fast gleich ist: snap auf User
+        if user_price_ >= MIN and abs(counter - user_price_) < 5:
+            st.session_state["snap_to_user"] = True
+            return user_price_
+
+        # 3) Verkäufer darf nicht unterbieten
+        if counter <= user_price_:
+            counter = user_price_ + 5
+
+        return max(counter, MIN)
+
 
     LIST = params["list_price"]
     MIN  = params["min_price"]
@@ -711,11 +742,11 @@ def generate_reply(history, params: dict) -> str:
     # B) 600–700 → HOHES Gegenangebot
     if 600 <= user_price < 700:
         if last_bot_offer is None:
-            raw_price = random.randint(920, 990)
+            raw = random.randint(920, 990)
         else:
-            raw_price = concession_step(last_bot_offer, MIN)
+            raw = concession_step(last_bot_offer, MIN)
 
-        counter = human_price(raw_price, user_price)
+        counter = human_price(raw, user_price)
         counter = ensure_not_higher(counter, MIN)
         counter = clamp_counter_vs_user(counter, user_price)
 
@@ -737,11 +768,11 @@ def generate_reply(history, params: dict) -> str:
     # C) 700–800 → realistisches Herantasten
     if 700 <= user_price < 800:
         if last_bot_offer is None:
-            raw_price = random.randint(910, 960) if msg_count < 3 else random.randint(850, 930)
+            raw = random.randint(910, 960) if msg_count < 3 else random.randint(850, 930)
         else:
-            raw_price = concession_step(last_bot_offer, MIN)
+            raw = concession_step(last_bot_offer, MIN)
 
-        counter = human_price(raw_price, user_price)
+        counter = human_price(raw, user_price)
         counter = ensure_not_higher(counter, MIN)
         counter = clamp_counter_vs_user(counter, user_price)
 
@@ -760,33 +791,78 @@ def generate_reply(history, params: dict) -> str:
         history2 = [{"role": "system", "content": instruct}] + history
         return llm_with_price_guard(history2, params, user_price=user_price, counter=counter, allow_no_price=False)
 
-    # D) ≥ 800 → leicht höheres Gegenangebot / später kontrollierte Nachgabe
-    if user_price >= 800:
+    # D) 800–900
+    if 800 <= user_price < 900:
         if last_bot_offer is None:
-            raw_price = user_price + (random.randint(60, 100) if msg_count < 3 else random.randint(15, 40))
+            raw = user_price + (random.randint(60, 110) if msg_count < 5 else random.randint(20, 55))
         else:
-            raw_price = concession_step(last_bot_offer, MIN)
+            raw = concession_step(last_bot_offer, MIN)
 
-        raw_price = min(raw_price, LIST)
-
-        counter = human_price(raw_price, user_price)
+        counter = human_price(raw, user_price)
         counter = ensure_not_higher(counter, MIN)
         counter = clamp_counter_vs_user(counter, user_price)
 
-        if isinstance(counter, int):
-            st.session_state["bot_offer"] = counter
-            st.session_state["last_bot_offer"] = counter
-        else:
-            st.session_state["bot_offer"] = None
-            return llm_no_price_reply(history, params, reason="user_reached_last_offer")
+        st.session_state["bot_offer"] = counter
+        st.session_state["last_bot_offer"] = counter
 
-        instruct = (
-            f"Der Nutzer bietet {user_price} €. "
-            f"Mach ein leicht höheres Gegenangebot: {counter} €. "
-            "Nenne KEINEN anderen Preis."
-        )
+        if st.session_state.get("snap_to_user"):
+            instruct = (
+                f"Der Nutzer bietet {user_price} €. "
+                f"Nimm das Angebot an. Bestätige kurz, freundlich und verbindlich. "
+                f"Nenne GENAU {counter} € und keine weitere Zahl."
+            )
+        else:
+            instruct = (
+                f"Der Nutzer bietet {user_price} €. "
+                f"Mach ein realistisches Gegenangebot: {counter} €. "
+                "Nenne KEINEN anderen Preis."
+            )
+
         history2 = [{"role": "system", "content": instruct}] + history
         return llm_with_price_guard(history2, params, user_price=user_price, counter=counter, allow_no_price=False)
+
+    # E) >= 900
+    if user_price >= 900:
+        if last_bot_offer is None:
+            raw = user_price + (random.randint(30, 70) if msg_count < 5 else random.randint(10, 40))
+        else:
+            raw = concession_step(last_bot_offer, MIN)
+
+        raw = min(raw, LIST)
+
+        counter = human_price(raw, user_price)
+        counter = ensure_not_higher(counter, MIN)
+        counter = clamp_counter_vs_user(counter, user_price)
+
+        st.session_state["bot_offer"] = counter
+        st.session_state["last_bot_offer"] = counter
+
+        if st.session_state.get("snap_to_user"):
+            instruct = (
+                f"Der Nutzer bietet {user_price} €. "
+                f"Nimm das Angebot an. Bestätige kurz, freundlich und verbindlich. "
+                f"Nenne GENAU {counter} € und keine weitere Zahl."
+            )
+        else:
+            instruct = (
+                f"Der Nutzer bietet {user_price} €. "
+                f"Mach ein realistisches Gegenangebot: {counter} €. "
+                "Nenne KEINEN anderen Preis."
+            )
+
+        history2 = [{"role": "system", "content": instruct}] + history
+        return llm_with_price_guard(history2, params, user_price=user_price, counter=counter, allow_no_price=False)
+
+    # Fallback (sollte nie laufen)
+    new_price = max(concession_step(last_bot_offer or LIST, MIN), MIN)
+    st.session_state["bot_offer"] = new_price
+    st.session_state["last_bot_offer"] = new_price
+    instruct = (
+        f"Der Nutzer bietet {user_price} €. "
+        f"Setze das Gegenangebot {new_price} € klar und freundlich. 2–4 Sätze."
+    )
+    history2 = [{"role": "system", "content": instruct}] + history
+    return llm_with_price_guard(history2, params, user_price=user_price, counter=new_price, allow_no_price=False)
 
 # -----------------------------
 # [ERGEBNIS-LOGGING (SQLite)]
@@ -1111,6 +1187,83 @@ if user_input and not st.session_state["closed"]:
         run_survey_and_stop()
         st.stop()
 
+    # ✅ Deal-Akzeptanz per Nachricht: last_bot_offer verwenden (stabil!)
+    last_offer = st.session_state.get("last_bot_offer")
+    if last_offer and user_accepts_price(user_input, last_offer):
+        st.session_state["final_bot_price"] = last_offer
+        st.session_state["closed"] = True
+
+        msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
+        log_result(
+            st.session_state["session_id"],
+            True,
+            last_offer,
+            msg_count,
+            ended_by="user",
+            ended_via="deal_message"
+        )
+        run_survey_and_stop()
+        st.stop()
+
+
+    # ✅ AUTO-DEAL: wenn User-Preis und letztes Bot-Angebot max. 5€ auseinanderliegen
+    last_offer = st.session_state.get("last_bot_offer")
+    if user_price is not None and last_offer is not None and is_close_enough_deal(user_price, last_offer, tol=5):
+        deal_price = max(user_price, st.session_state.params["min_price"])
+
+        instruct_deal = (
+            f"Der Nutzer bietet {user_price} €. "
+            f"Ihr liegt maximal 5 € auseinander. "
+            f"Nimm das Angebot an. Bestätige kurz, freundlich und verbindlich. "
+            f"Nenne GENAU {deal_price} € und keine weitere Zahl."
+        )
+        llm_history2 = [{"role": "system", "content": instruct_deal}] + llm_history
+
+        bot_text = llm_with_price_guard(
+            llm_history2,
+            st.session_state.params,
+            user_price=user_price,
+            counter=deal_price,
+            allow_no_price=False
+        )
+
+        # State setzen
+        st.session_state["bot_offer"] = deal_price
+        st.session_state["last_bot_offer"] = deal_price
+        st.session_state["final_bot_price"] = deal_price
+        st.session_state["agreed_price"] = deal_price
+        st.session_state["closed"] = True
+
+        # Bot msg speichern + loggen
+        st.session_state["history"].append({
+            "role": "assistant",
+            "text": bot_text,
+            "ts": datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
+        })
+        msg_index = len(st.session_state["history"]) - 1
+        log_chat_message(
+            st.session_state["session_id"],
+            "assistant",
+            bot_text,
+            datetime.now(tz).strftime("%d.%m.%Y %H:%M"),
+            msg_index
+        )
+
+        # Ergebnis loggen
+        msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
+        log_result(
+            st.session_state["session_id"],
+            True,
+            deal_price,
+            msg_count,
+            ended_by="bot",
+            ended_via="auto_deal_gap"
+        )
+
+        run_survey_and_stop()
+        st.stop()
+
+
     elif decision == "warn":
         bot_text = msg
 
@@ -1179,17 +1332,21 @@ if not st.session_state["closed"]:
     show_deal = (bot_offer is not None)
 
     # DEAL-BUTTON
+    current_offer = st.session_state.get("bot_offer")
+    if current_offer is None:
+        current_offer = st.session_state.get("last_bot_offer")
+
+    show_deal = (current_offer is not None)
+
     with deal_col1:
         if st.button(
-            f"💚 Deal bestätigen: {bot_offer} €" if show_deal else "Deal bestätigen",
+            f"💚 Deal bestätigen: {current_offer} €" if show_deal else "Deal bestätigen",
             disabled=not show_deal,
             use_container_width=True
         ):
-            bot_price = st.session_state.get("bot_offer")
-            msg_count = len([
-                m for m in st.session_state["history"]
-                if m["role"] in ("user", "assistant")
-            ])
+            bot_price = current_offer
+            msg_count = len([m for m in st.session_state["history"] if m["role"] in ("user", "assistant")])
+
             log_result(
                 st.session_state["session_id"],
                 True,
@@ -1199,8 +1356,11 @@ if not st.session_state["closed"]:
                 ended_via="deal_button"
             )
 
+            st.session_state["final_bot_price"] = bot_price
             st.session_state["closed"] = True
             run_survey_and_stop()
+            st.stop()
+
 
     # ABBRUCH-BUTTON
     with deal_col2:
@@ -1221,6 +1381,7 @@ if not st.session_state["closed"]:
             )
             st.session_state["closed"] = True
             run_survey_and_stop()
+            st.stop()
 
 # -----------------------------
 # [ADMIN-BEREICH: Ergebnisse (privat)]
