@@ -124,7 +124,7 @@ SID = st.session_state["session_id"]
 
 BOT_A_URL = "https://verhandlung123.streamlit.app"
 BOT_B_URL = "https://verhandlung.streamlit.app"
-SCOREBOARD_URL = "https://euer-scoreboard.streamlit.app"
+SCOREBOARD_URL = "https://botscoreboard.streamlit.app"
 
 def get_scoreboard_url(pid: str, order: str) -> str:
     return f"{SCOREBOARD_URL}?pid={pid}&order={order}"
@@ -1200,8 +1200,6 @@ if pwd_ok:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-        else:
-            st.info("Noch keine Umfrage-Daten vorhanden.")
 
     with st.sidebar.expander("Alle Verhandlungsergebnisse", expanded=True):
         df = load_results_df()
@@ -1273,37 +1271,25 @@ if pwd_ok:
         st.session_state["confirm_delete"] = False
 
     if not st.session_state["confirm_delete"]:
-        if st.button("✅ Ja, löschen"):
-            init_db()
-            conn = get_conn()
-            cur = conn.cursor()
-            cur.execute("DELETE FROM results")
-            cur.execute("DELETE FROM chat_messages")
-            cur.execute("DELETE FROM survey")
-            conn.commit()
-            conn.close()
-            st.session_state["confirm_delete"] = False
-            st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
+        if st.sidebar.button("🗑️ Ergebnisse löschen (Bestätigung)"):
+            st.session_state["confirm_delete"] = True
             st.experimental_rerun()
     else:
-        col1, col2 = st.sidebar.columns(2)
-
-        with col1:
+        c1, c2 = st.sidebar.columns(2)
+        with c1:
             if st.button("❌ Abbrechen"):
                 st.session_state["confirm_delete"] = False
-
-        with col2:
-            if st.button("✅ Ja, löschen"):
-                conn = sqlite3.connect(DB_PATH)
-                c = conn.cursor()
-                c.execute("DELETE FROM results")
-                c.execute("DELETE FROM chat_messages")
+                st.experimental_rerun()
+        with c2:
+            if st.button("✅ Ja, wirklich löschen"):
+                init_db()
+                conn = get_conn()
+                cur = conn.cursor()
+                cur.execute("DELETE FROM results")
+                cur.execute("DELETE FROM chat_messages")
+                cur.execute("DELETE FROM survey")
                 conn.commit()
                 conn.close()
-
-                if os.path.exists(SURVEY_FILE):
-                    os.remove(SURVEY_FILE)
-
                 st.session_state["confirm_delete"] = False
                 st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
                 st.experimental_rerun()
