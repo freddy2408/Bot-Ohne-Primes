@@ -7,9 +7,9 @@ import os, re, uuid, random, requests
 from datetime import datetime
 import streamlit as st
 import pandas as pd
-import sqlite3
 import base64
 import pytz
+from db_common import get_conn, init_db
 
 from survey import show_survey
 
@@ -96,8 +96,26 @@ def get_pid() -> str:
 if "participant_id" not in st.session_state:
     st.session_state["participant_id"] = get_pid()
 
+PID = st.session_state["participant_id"]
+
 ORDER = str(st.query_params.get("order", "")).strip()
 STEP  = str(st.query_params.get("step", "")).strip()
+
+if STEP == "2":
+    init_db()
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT 1 FROM survey
+        WHERE participant_id = %s AND step = '1'
+        LIMIT 1
+    """, (PID,))
+    ok = cur.fetchone() is not None
+    conn.close()
+
+    if not ok:
+        st.error("Bitte schließen Sie zuerst Verhandlung 1 inklusive Fragebogen ab.")
+        st.stop()
 
 BOT_VARIANT = "friendly"
 
@@ -106,6 +124,10 @@ SID = st.session_state["session_id"]
 
 BOT_A_URL = "https://verhandlung123.streamlit.app"
 BOT_B_URL = "https://verhandlung.streamlit.app"
+SCOREBOARD_URL = "https://euer-scoreboard.streamlit.app"
+
+def get_scoreboard_url(pid: str, order: str) -> str:
+    return f"{SCOREBOARD_URL}?pid={pid}&order={order}"
 
 def get_next_url(pid: str, order: str, bot_variant: str) -> str:
     # bot_variant: "power" = Bot A, "friendly" = Bot B
@@ -160,22 +182,58 @@ def run_survey_and_stop():
         survey_data["step"] = STEP
         survey_data["survey_ts_utc"] = datetime.utcnow().isoformat()
 
-        if os.path.exists(SURVEY_FILE):
-            df_old = pd.read_excel(SURVEY_FILE)
-            df = pd.concat([df_old, pd.DataFrame([survey_data])], ignore_index=True)
-        else:
-            df = pd.DataFrame([survey_data])
+        init_db()
+        conn = get_conn()
+        cur = conn.cursor()
 
-        df.to_excel(SURVEY_FILE, index=False)
+        cur.execute("""
+            INSERT INTO survey (
+                survey_ts_utc, participant_id, session_id, bot_variant, order_id, step,
+                age, gender, education, field, field_other,
+                satisfaction_outcome, satisfaction_process, fairness, better_result,
+                deviation, willingness, again
+            ) VALUES (
+                %s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,
+                %s,%s,%s
+            )
+        """, (
+            survey_data["survey_ts_utc"], PID, SID, BOT_VARIANT, ORDER, STEP,
+            survey_data.get("age"), survey_data.get("gender"), survey_data.get("education"),
+            survey_data.get("field"), survey_data.get("field_other"),
+            survey_data.get("satisfaction_outcome"), survey_data.get("satisfaction_process"),
+            survey_data.get("fairness"), survey_data.get("better_result"),
+            survey_data.get("deviation"), survey_data.get("willingness"),
+            survey_data.get("again"),
+        ))
+
+        conn.commit()
+        conn.close()
+
         st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
 
-        st.link_button(
-            "➡️ Weiter zu Verhandlung 2",
-            get_next_url(PID, ORDER, BOT_VARIANT),
-            use_container_width=True
-        )
-        st.caption("Bitte klicken Sie auf den Button, um zur zweiten Verhandlung zu gelangen.")
-        st.stop()
+        if STEP == "1":
+            st.link_button(
+                "➡️ Weiter zu Verhandlung 2",
+                get_next_url(PID, ORDER, BOT_VARIANT),
+                use_container_width=True
+            )
+            st.caption("Bitte klicken Sie auf den Button, um zur zweiten Verhandlung zu gelangen.")
+            st.stop()
+
+        elif STEP == "2":
+            st.link_button(
+                "🏆 Zum Scoreboard",
+                get_scoreboard_url(PID, ORDER),
+                use_container_width=True
+            )
+            st.caption("Danke! Sie können jetzt das Scoreboard ansehen.")
+            st.stop()
+
+        else:
+            st.error("Ungültiger Step in der URL.")
+            st.stop()
         
 # Wenn bereits geschlossen: sofort Survey
 if st.session_state["closed"]:
@@ -774,116 +832,51 @@ def generate_reply(history_msgs, params: dict) -> str:
 # -----------------------------
 # Logging (SQLite)
 # -----------------------------
-DB_PATH = "verhandlungsergebnisse.sqlite3"
-
-def _add_column_if_missing(c, table: str, col: str, coltype: str):
-    cols = [r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()]
-    if col not in cols:
-        c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}")
-
-def _init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts TEXT,
-            session_id TEXT,
-            deal INTEGER,
-            price INTEGER,
-            msg_count INTEGER
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS chat_messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT,
-            role TEXT,
-            text TEXT,
-            ts TEXT,
-            msg_index INTEGER
-        )
-    """)
-
-    _add_column_if_missing(c, "results", "participant_id", "TEXT")
-    _add_column_if_missing(c, "results", "bot_variant", "TEXT")
-    _add_column_if_missing(c, "results", "order_id", "TEXT")
-    _add_column_if_missing(c, "results", "step", "TEXT")
-    _add_column_if_missing(c, "results", "ended_by", "TEXT")
-    _add_column_if_missing(c, "results", "ended_via", "TEXT")
-    _add_column_if_missing(c, "chat_messages", "participant_id", "TEXT")
-    _add_column_if_missing(c, "chat_messages", "bot_variant", "TEXT")
-
-    conn.commit()
-    conn.close()
 
 def log_result(session_id: str, deal: bool, price: int | None, msg_count: int, ended_by: str, ended_via: str | None = None):
-    _init_db()
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    c.execute("""
+    init_db()
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
         INSERT INTO results (
             ts, session_id, participant_id, bot_variant, order_id, step,
             deal, price, msg_count, ended_by, ended_via
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         datetime.utcnow().isoformat(),
-        session_id,
-        PID,
-        BOT_VARIANT,
-        ORDER,
-        STEP,
-        1 if deal else 0,
-        price,
-        msg_count,
-        ended_by,
-        ended_via
+        session_id, PID, BOT_VARIANT, ORDER, STEP,
+        1 if deal else 0, price, msg_count, ended_by, ended_via
     ))
-
     conn.commit()
     conn.close()
 
-def log_chat_message(session_id, role, text, ts, msg_index):
-    _init_db()
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    c.execute("""
+def log_chat_message(session_id: str, role: str, text: str, ts: str, msg_index: int):
+    init_db()
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
         INSERT INTO chat_messages (
-            session_id, participant_id, bot_variant,
-            role, text, ts, msg_index
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        session_id,
-        PID,
-        BOT_VARIANT,
-        role,
-        text,
-        ts,
-        msg_index
-    ))
-
+            session_id, participant_id, bot_variant, role, text, ts, msg_index
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s)
+    """, (session_id, PID, BOT_VARIANT, role, text, ts, msg_index))
     conn.commit()
     conn.close()
 
-def load_chat_for_session(session_id):
-    _init_db()
-    conn = sqlite3.connect(DB_PATH)
+def load_chat_for_session(session_id: str) -> pd.DataFrame:
+    init_db()
+    conn = get_conn()
     df = pd.read_sql_query("""
         SELECT participant_id, bot_variant, role, text, ts
         FROM chat_messages
-        WHERE session_id = ?
+        WHERE session_id = %s
         ORDER BY msg_index ASC
     """, conn, params=(session_id,))
     conn.close()
     return df
 
 def load_results_df() -> pd.DataFrame:
-    _init_db()
-    conn = sqlite3.connect(DB_PATH)
+    init_db()
+    conn = get_conn()
     df = pd.read_sql_query("""
         SELECT
             ts, participant_id, session_id, bot_variant, order_id, step,
@@ -895,17 +888,15 @@ def load_results_df() -> pd.DataFrame:
 
     if not df.empty:
         df["deal"] = df["deal"].map({1: "Deal", 0: "Abgebrochen"})
-        df["ended_by"] = df["ended_by"].map({"user": "User", "bot": "Bot"})
-        df["ended_by"] = df["ended_by"].fillna("Unbekannt")
+        df["ended_by"] = df["ended_by"].map({"user": "User", "bot": "Bot"}).fillna("Unbekannt")
         df["ended_via"] = df["ended_via"].fillna("")
-
     return df
 
 def export_all_chats_to_txt() -> str:
-    _init_db()
-    conn = sqlite3.connect(DB_PATH)
+    init_db()
+    conn = get_conn()
     df = pd.read_sql_query("""
-        SELECT session_id, role, text, ts
+        SELECT session_id, role, text, ts, msg_index
         FROM chat_messages
         ORDER BY session_id, msg_index ASC
     """, conn)
@@ -914,16 +905,15 @@ def export_all_chats_to_txt() -> str:
     if df.empty:
         return "Keine Chatverläufe vorhanden."
 
-    output = []
+    out = []
     for session_id, group in df.groupby("session_id"):
-        output.append(f"Session-ID: {session_id}")
-        output.append("-" * 50)
+        out.append(f"Session-ID: {session_id}")
+        out.append("-" * 50)
         for _, row in group.iterrows():
             role = "USER" if row["role"] == "user" else "BOT"
-            output.append(f"[{row['ts']}] {role}: {row['text']}")
-        output.append("\n" + "=" * 60 + "\n")
-
-    return "\n".join(output)
+            out.append(f"[{row['ts']}] {role}: {row['text']}")
+        out.append("\n" + "=" * 60 + "\n")
+    return "\n".join(out)
 
 # -----------------------------
 # Szenario Kopf
@@ -1189,8 +1179,13 @@ if pwd_ok:
     st.sidebar.success("Zugang gewährt.")
 
     with st.sidebar.expander("📋 Umfrageergebnisse", expanded=False):
-        if os.path.exists(SURVEY_FILE):
-            df_s = pd.read_excel(SURVEY_FILE)
+        init_db()
+        conn = get_conn()
+        df_s = pd.read_sql_query("SELECT * FROM survey ORDER BY id ASC", conn)
+        conn.close()
+        if df_s.empty:
+            st.info("Noch keine Umfrage-Daten vorhanden.")
+        else:
             st.dataframe(df_s, use_container_width=True)
 
             from io import BytesIO
@@ -1278,10 +1273,18 @@ if pwd_ok:
         st.session_state["confirm_delete"] = False
 
     if not st.session_state["confirm_delete"]:
-        if st.sidebar.button("🗑️ Alle Ergebnisse löschen"):
-            st.session_state["confirm_delete"] = True
-            st.sidebar.warning("⚠️ Bist du sicher, dass du **ALLE Ergebnisse** löschen möchtest?")
-            st.sidebar.info("Dieser Vorgang kann nicht rückgängig gemacht werden.")
+        if st.button("✅ Ja, löschen"):
+            init_db()
+            conn = get_conn()
+            cur = conn.cursor()
+            cur.execute("DELETE FROM results")
+            cur.execute("DELETE FROM chat_messages")
+            cur.execute("DELETE FROM survey")
+            conn.commit()
+            conn.close()
+            st.session_state["confirm_delete"] = False
+            st.sidebar.success("Alle Ergebnisse wurden gelöscht.")
+            st.experimental_rerun()
     else:
         col1, col2 = st.sidebar.columns(2)
 
