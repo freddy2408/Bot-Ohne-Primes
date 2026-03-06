@@ -10,7 +10,6 @@ import pandas as pd
 import base64
 import pytz
 from db_common import get_conn, init_db
-import streamlit.components.v1 as components
 
 from survey import show_survey
 
@@ -215,35 +214,26 @@ def run_survey_and_stop():
         st.success("Vielen Dank! Ihre Antworten wurden gespeichert.")
 
         if STEP == "1":
-            target_url = get_next_url(PID, ORDER, BOT_VARIANT)
-            fallback_label = "Weiter zu Verhandlung 2"
+            st.link_button(
+                "➡️ Weiter zu Verhandlung 2",
+                get_next_url(PID, ORDER, BOT_VARIANT),
+                use_container_width=True
+            )
+            st.caption("Bitte klicken Sie auf den Button, um zur zweiten Verhandlung zu gelangen.")
+            st.stop()
+
         elif STEP == "2":
-            target_url = get_scoreboard_url(PID, ORDER)
-            fallback_label = "Zum Scoreboard"
+            st.link_button(
+                "🏆 Zum Scoreboard",
+                get_scoreboard_url(PID, ORDER),
+                use_container_width=True
+            )
+            st.caption("Danke! Sie können jetzt das Scoreboard ansehen.")
+            st.stop()
+
         else:
             st.error("Ungültiger Step in der URL.")
             st.stop()
-
-        st.markdown(
-            f"""
-            <a id="auto-continue-link" href="{target_url}" target="_self"
-               style="display:inline-block;padding:0.6rem 1rem;border-radius:0.5rem;
-                      background:#16a34a;color:white;text-decoration:none;font-weight:600;">
-               {fallback_label}
-            </a>
-            <script>
-              const link = window.parent.document.getElementById("auto-continue-link")
-                         || document.getElementById("auto-continue-link");
-              if (link) {{
-                  link.click();
-              }}
-            </script>
-            """,
-            unsafe_allow_html=True
-        )
-
-        st.caption("Falls die automatische Weiterleitung nicht funktioniert, klicken Sie einmal auf den Link oben.")
-        st.stop()
 
                 
 # Wenn bereits geschlossen: sofort Survey und sonst nichts mehr rendern
