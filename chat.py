@@ -216,22 +216,33 @@ def run_survey_and_stop():
 
         if STEP == "1":
             target_url = get_next_url(PID, ORDER, BOT_VARIANT)
+            fallback_label = "Weiter zu Verhandlung 2"
         elif STEP == "2":
             target_url = get_scoreboard_url(PID, ORDER)
+            fallback_label = "Zum Scoreboard"
         else:
             st.error("Ungültiger Step in der URL.")
             st.stop()
 
-        components.html(
+        st.markdown(
             f"""
+            <a id="auto-continue-link" href="{target_url}" target="_self"
+               style="display:inline-block;padding:0.6rem 1rem;border-radius:0.5rem;
+                      background:#16a34a;color:white;text-decoration:none;font-weight:600;">
+               {fallback_label}
+            </a>
             <script>
-                window.top.location.href = "{target_url}";
+              const link = window.parent.document.getElementById("auto-continue-link")
+                         || document.getElementById("auto-continue-link");
+              if (link) {{
+                  link.click();
+              }}
             </script>
             """,
-            height=0,
+            unsafe_allow_html=True
         )
 
-        st.caption("Falls die automatische Weiterleitung nicht funktioniert, laden Sie die Seite kurz neu.")
+        st.caption("Falls die automatische Weiterleitung nicht funktioniert, klicken Sie einmal auf den Link oben.")
         st.stop()
 
                 
