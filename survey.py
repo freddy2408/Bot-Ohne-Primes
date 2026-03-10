@@ -57,33 +57,27 @@ def show_survey():
 
         st.markdown("---")
 
+
         # ---------------------------
-        # 4. Fachbereich (optional)
+        # 4. Fachbereich
         # ---------------------------
-        field = None
-        field_other = None
+        field = st.selectbox(
+            "4. In welchem Fachbereich liegt Ihr Studium / Abschluss?",
+            [
+                "Nicht zutreffend",
+                "Architektur, Bauingenieurwesen und Geomatik",
+                "Informatik und Ingenieurwissenschaften",
+                "Wirtschaft und Recht",
+                "Soziale Arbeit und Gesundheit",
+                "Andere"
+            ],
+            index=None
+        )
 
-        if education in [
-            "Bachelor", "Master", "Diplom",
-            "Staatsexamen", "Promotion",
-            "Habilitation", "Sonstiger Abschluss"
-        ]:
-            field = st.selectbox(
-                "4. In welchem Fachbereich liegt Ihr Studium / Abschluss?",
-                [
-                    "Architektur, Bauingenieurwesen und Geomatik",
-                    "Informatik und Ingenieurwissenschaften",
-                    "Wirtschaft und Recht",
-                    "Soziale Arbeit und Gesundheit",
-                    "Andere"
-                ],
-                index=None
-            )
+        field_other = st.text_input(
+            "Falls 'Andere' oder falls Sie Ihren Fachbereich genauer angeben möchten:"
+        )
 
-            if field == "Andere":
-                field_other = st.text_input("Bitte geben Sie an, welcher Fachbereich:")
-
-        st.markdown("---")
 
         # -------------------------------------------------------
         # Hilfsfunktion: Skala 1–6 OHNE Vorauswahl
